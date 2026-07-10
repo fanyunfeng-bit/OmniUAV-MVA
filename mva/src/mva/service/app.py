@@ -1,7 +1,8 @@
 from __future__ import annotations
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from mva.service.models import (
     EngineProtocol, HealthResponse, AnswerRequest, AnswerResponse,
+    IngestRequest, IngestStartResponse, IngestStatusResponse,
 )
 
 
@@ -16,5 +17,18 @@ def create_app(engine: EngineProtocol) -> FastAPI:
     @app.post("/answer", response_model=AnswerResponse)
     def answer(req: AnswerRequest) -> AnswerResponse:
         return engine.answer(req)
+
+    @app.post("/ingest/start", response_model=IngestStartResponse)
+    def ingest_start(req: IngestRequest) -> IngestStartResponse:
+        return engine.ingest_start(req)
+
+    @app.get("/ingest/status", response_model=IngestStatusResponse)
+    def ingest_status(job: str) -> IngestStatusResponse:
+        return engine.ingest_status(job)
+
+    @app.post("/ingest/stop", status_code=204)
+    def ingest_stop(job: str) -> Response:
+        engine.ingest_stop(job)
+        return Response(status_code=204)
 
     return app
