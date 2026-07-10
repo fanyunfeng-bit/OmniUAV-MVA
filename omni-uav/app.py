@@ -117,6 +117,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # [MOD 2026-07-10 | ingest触发] 相机 tab 的"入库"按钮 → MainWindow 调 sidecar 入库
         self.camera_tab.ingest_requested.connect(self._on_ingest_requested)
         tabs.addTab(self.camera_tab, "多无人机镜头")
+        # [MOD 2026-07-10 | P1] 多视角检索面板
+        from tabs.retrieval_tab import RetrievalTab
+        self.retrieval_tab = RetrievalTab(self.mva_client)
+        self.retrieval_tab.jump_requested.connect(self._on_jump_requested)
+        tabs.addTab(self.retrieval_tab, "多视角检索")
         tabs.addTab(PlyMeshTab(data_dir=data_dir, output_mesh=tsdf_mesh), "场景重建")
         self.evaluation_tab = EvaluationTab(llm_client=self.llm_client, system_output=self.system_output)
         self.evaluation_tab.data_loaded.connect(self._on_evaluation_data_loaded)
@@ -594,6 +599,16 @@ Return JSON only:"""
         # [MOD 2026-07-10 | P0] 周期探活 MVA sidecar，更新状态灯 + _engine_alive(问答路由用)
         self._engine_alive = self.mva_client.is_alive()
         self.engine_status_label.setText("引擎●已连接" if self._engine_alive else "引擎○未连接")
+
+    def _on_jump_requested(self, view_id: str, t_sec: float):
+        # [MOD 2026-07-10 | P1] 检索命中 → 跳到对应视角那一帧(见 camera_tab.seek_to)
+        cam = {"view1": "cam01", "view2": "cam02",
+               "view3": "cam03", "view4": "cam04"}.get(view_id, view_id)
+        try:
+            self.camera_tab.seek_to(cam, t_sec)
+            self.system_output.appendPlainText(f"[检索] 跳转 {view_id} → {t_sec:.1f}s")
+        except Exception as e:  # noqa: BLE001
+            self.system_output.appendPlainText(f"[检索] 跳转失败: {e}")
 
     def _on_ingest_requested(self, dataset_root: str, scene: str):
         # [MOD 2026-07-10 | ingest触发] 把当前文件夹作为 pcl-sim scene 送入 sidecar 入库
