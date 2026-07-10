@@ -47,6 +47,29 @@ class AnswerResponse(BaseModel):
     plan: Optional[dict] = None
 
 
+class RetrieveRequest(BaseModel):
+    text: Optional[str] = None
+    image_path: Optional[str] = None
+    top_k: int = 3
+    vector_type: str = "frame"           # "frame"=段级(本轮 MVP)；"reid"=目标级(后续)
+
+
+class RetrieveHit(BaseModel):
+    view_id: str
+    t: Optional[float] = None            # 段起点(秒)，用于跳帧/抽缩略图
+    segment_idx: Optional[int] = None
+    score: float                         # 越大越相关(= 1 - 距离)
+    kind: str = "segment"                # "segment" | "bbox"
+    class_name: Optional[str] = None
+    doc: Optional[str] = None            # 人读描述(如 "view1 [0.0-10.0s]")
+    thumbnail_path: Optional[str] = None # 仅 top-1 有
+
+
+class RetrieveResponse(BaseModel):
+    hits: list[RetrieveHit] = []
+    n_vectors_searched: int = 0
+
+
 @runtime_checkable
 class EngineProtocol(Protocol):
     def health(self) -> HealthResponse: ...
@@ -54,3 +77,4 @@ class EngineProtocol(Protocol):
     def ingest_status(self, job_id: str) -> IngestStatusResponse: ...
     def ingest_stop(self, job_id: str) -> None: ...
     def answer(self, req: AnswerRequest) -> AnswerResponse: ...
+    def retrieve(self, req: RetrieveRequest) -> RetrieveResponse: ...
