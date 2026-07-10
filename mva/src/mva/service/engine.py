@@ -4,6 +4,7 @@
 避开 DuckDB 跨进程读写锁、也免得重复加载 16G 嵌入模型。
 """
 from __future__ import annotations
+import os
 import threading
 import uuid
 from typing import Callable, Optional
@@ -37,21 +38,58 @@ class AnalysisEngine:
         self.db_path = db_path
         self.chroma_dir = chroma_dir
         self.device = device
+        self.embedder_model = embedder_model
+        self._llm = llm
+        # [按 scene 分库] 库根 = 启动 db 所在目录；scene → <root>/<scene>/{world.duckdb,chroma}
+        self.library_root = os.path.dirname(os.path.abspath(db_path)) if db_path else os.getcwd()
+        self._current_scene: Optional[str] = None
         self._runner = ingest_runner or self._inprocess_ingest
         self._jobs: dict[str, _IngestJob] = {}
         self._lock = threading.Lock()
         self._svc = None
-        self._svc_kwargs = dict(db_path=db_path, chroma_dir=chroma_dir,
-                                embedder_model=embedder_model, embed_dim=768,
-                                device=device, llm=llm)
         if not defer_query_service:
             self._ensure_service()
 
+    def _lib_paths(self, scene: Optional[str]):
+        """scene=None → 启动默认库；否则 <library_root>/<scene>/{world.duckdb,chroma}。"""
+        if not scene:
+            return self.db_path, self.chroma_dir
+        base = os.path.join(self.library_root, scene)
+        return os.path.join(base, "world.duckdb"), os.path.join(base, "chroma")
+
+    def _build_svc(self, db, chroma, embedder=None):
+        from mva.cli.query import QueryService
+        if db:
+            os.makedirs(os.path.dirname(os.path.abspath(db)), exist_ok=True)
+        if chroma:
+            os.makedirs(chroma, exist_ok=True)
+        self._svc = QueryService(
+            db_path=db, chroma_dir=chroma, embedder=embedder,
+            embedder_model=self.embedder_model, embed_dim=768,
+            device=self.device, llm=self._llm,
+        )
+        return self._svc
+
     def _ensure_service(self):
         if self._svc is None:
-            from mva.cli.query import QueryService
-            self._svc = QueryService(**self._svc_kwargs)
+            self._build_svc(*self._lib_paths(self._current_scene))
         return self._svc
+
+    def select_scene(self, scene: Optional[str]) -> None:
+        """切换活动库到某 scene 的独立库(复用已加载的 embedder，免重载 16G)。"""
+        db, chroma = self._lib_paths(scene)
+        cur = self._svc
+        if cur is not None and getattr(cur, "db_path", None) == db:
+            self._current_scene = scene
+            return
+        embedder = getattr(cur, "embedder", None) if cur is not None else None
+        if cur is not None:
+            try:
+                cur.store.close()       # 释放旧 DuckDB 读写锁；embedder 复用、不 unload
+            except Exception:            # noqa: BLE001
+                pass
+        self._build_svc(db, chroma, embedder=embedder)
+        self._current_scene = scene
 
     def _inprocess_ingest(self, req: IngestRequest, progress: ProgressCb) -> None:
         """进程内入库：复用 sidecar 已加载的 store/embedder/vstore(避 DuckDB 锁 + 免重载嵌入)。
@@ -59,6 +97,8 @@ class AnalysisEngine:
         config 可含: dataset_root, views, window_sec, stride_sec, nframes_per_segment,
         segments_per_view(0=全部), detect(bool), detect_model, detect_conf, tracker。
         """
+        # [按 scene 分库] 先把活动库切到该 scene 的独立库，再写入它
+        self.select_scene(req.source)
         svc = self._ensure_service()
         if getattr(svc, "embedder", None) is None or getattr(svc, "vstore", None) is None:
             raise RuntimeError("sidecar 未加载嵌入/向量库：入库需带 --chroma-dir 启动 sidecar")
@@ -100,7 +140,8 @@ class AnalysisEngine:
                  total_segments=int(stats.get("segments", 0)))
 
     def health(self) -> HealthResponse:
-        return HealthResponse(engine_ready=self._svc is not None, db_path=self.db_path)
+        db = getattr(self._svc, "db_path", self.db_path) if self._svc else self.db_path
+        return HealthResponse(engine_ready=self._svc is not None, db_path=db)
 
     def ingest_start(self, req: IngestRequest) -> IngestStartResponse:
         job_id = uuid.uuid4().hex[:12]

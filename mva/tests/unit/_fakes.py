@@ -40,3 +40,6 @@ class FakeEngine:
                               kind="segment", thumbnail_path="/tmp/thumb.jpg")],
             n_vectors_searched=28,
         )
+
+    def select_scene(self, scene):
+        self.current_scene = scene

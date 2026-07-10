@@ -16,3 +16,13 @@ def test_retrieve(monkeypatch):
     out = c.retrieve(text="airplane")
     assert out["n_vectors_searched"] == 28
     assert out["hits"][0]["view_id"] == "view1"
+
+
+def test_select_scene(monkeypatch):
+    c = MvaClient()
+    seen = {}
+    monkeypatch.setattr(c._s, "post",
+        lambda url, **k: (seen.update(url=url, params=k.get("params")), _Resp({}))[1])
+    c.select_scene("sceneA")
+    assert seen["url"].endswith("/select_scene")
+    assert seen["params"]["scene"] == "sceneA"

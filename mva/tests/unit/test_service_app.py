@@ -38,3 +38,7 @@ def test_ingest_stop():
     jid = c.post("/ingest/start", json={"source": "/d"}).json()["job_id"]
     assert c.post("/ingest/stop", params={"job": jid}).status_code == 204
     assert c.get("/ingest/status", params={"job": jid}).json()["state"] == "done"
+
+
+def test_select_scene_endpoint():
+    assert _client().post("/select_scene", params={"scene": "sceneX"}).status_code == 204

@@ -36,4 +36,9 @@ def create_app(engine: EngineProtocol) -> FastAPI:
     def retrieve(req: RetrieveRequest) -> RetrieveResponse:
         return engine.retrieve(req)
 
+    @app.post("/select_scene", status_code=204)
+    def select_scene(scene: str) -> Response:
+        engine.select_scene(scene)
+        return Response(status_code=204)
+
     return app

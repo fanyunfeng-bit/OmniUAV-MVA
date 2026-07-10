@@ -54,3 +54,9 @@ class MvaClient:
                          timeout=self.timeout)
         r.raise_for_status()
         return r.json()
+
+    def select_scene(self, scene: str) -> None:
+        """切换 sidecar 活动库到某 scene 的独立库(之后 检索/问答/入库 都针对它)。"""
+        r = self._s.post(f"{self.base_url}/select_scene",
+                         params={"scene": scene}, timeout=self.timeout)
+        r.raise_for_status()

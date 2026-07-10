@@ -33,6 +33,8 @@ class CameraSource:
 class MultiUavCameraTab(QtWidgets.QWidget):
     # [MOD 2026-07-10 | ingest触发] 请求把当前文件夹当一个 scene 入库到 MVA。参数:(dataset_root, scene)
     ingest_requested = QtCore.pyqtSignal(str, str)
+    # [MOD 2026-07-10 | 按scene分库] 选了新文件夹 → 通知 sidecar 切到该 scene 的独立库。参数:(scene)
+    scene_selected = QtCore.pyqtSignal(str)
 
     def __init__(
         self,
@@ -608,6 +610,8 @@ class MultiUavCameraTab(QtWidgets.QWidget):
             print(f"Found {len(video_files)} video(s): {', '.join(video_names)}")
 
         self._set_data_dir(new_dir)
+        # [MOD 2026-07-10 | 按scene分库] 通知 sidecar 把活动库切到该文件夹对应的 scene
+        self.scene_selected.emit(new_dir.name)
 
     def _request_ingest(self):
         # [MOD 2026-07-10 | ingest触发] 当前文件夹当一个 pcl-sim scene: root=父目录, scene=目录名

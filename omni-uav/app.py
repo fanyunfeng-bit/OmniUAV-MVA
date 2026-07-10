@@ -116,6 +116,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.camera_tab.parent_llm_client = self.llm_client
         # [MOD 2026-07-10 | ingest触发] 相机 tab 的"入库"按钮 → MainWindow 调 sidecar 入库
         self.camera_tab.ingest_requested.connect(self._on_ingest_requested)
+        self.camera_tab.scene_selected.connect(self._on_scene_selected)
         tabs.addTab(self.camera_tab, "多无人机镜头")
         # [MOD 2026-07-10 | P1] 多视角检索面板
         from tabs.retrieval_tab import RetrievalTab
@@ -609,6 +610,16 @@ Return JSON only:"""
             self.system_output.appendPlainText(f"[检索] 跳转 {view_id} → {t_sec:.1f}s")
         except Exception as e:  # noqa: BLE001
             self.system_output.appendPlainText(f"[检索] 跳转失败: {e}")
+
+    def _on_scene_selected(self, scene: str):
+        # [MOD 2026-07-10 | 按scene分库] 选了文件夹 → 让 sidecar 把活动库切到该 scene(检索/问答/入库都针对它)
+        if not getattr(self, "_engine_alive", False):
+            return
+        try:
+            self.mva_client.select_scene(scene)
+            self.system_output.appendPlainText(f"[库] 已切换到场景库: {scene}")
+        except Exception as e:  # noqa: BLE001
+            self.system_output.appendPlainText(f"[库] 切换失败: {e}")
 
     def _on_ingest_requested(self, dataset_root: str, scene: str):
         # [MOD 2026-07-10 | ingest触发] 把当前文件夹作为 pcl-sim scene 送入 sidecar 入库

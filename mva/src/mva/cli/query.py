@@ -63,6 +63,7 @@ class QueryService:
         device: Optional[str] = None,
         enable_cross_view: bool = True,
         llm=None,
+        embedder=None,
     ) -> None:
         self.db_path = db_path
         self.chroma_dir = chroma_dir
@@ -72,14 +73,17 @@ class QueryService:
         # Open the structured store
         self.store = WorldStateStore(db_path=db_path)
 
-        # Open the embedder + vector store iff a chroma dir is configured
-        self.embedder: Optional[MultimodalEmbedder] = None
+        # Open the embedder + vector store iff a chroma dir is configured.
+        # 允许注入已加载的 embedder(engine 切库时复用，免重载 16G)；注入的不归本对象所有(close 不 unload)。
+        self.embedder: Optional[MultimodalEmbedder] = embedder
+        self._own_embedder = embedder is None
         self.vstore: Optional[VectorStore] = None
-        if chroma_dir and embedder_model:
-            self.embedder = MultimodalEmbedder(
-                model_path=embedder_model, dim=embed_dim, device=device,
-            )
-            self.embedder._ensure_loaded()
+        if chroma_dir and (embedder is not None or embedder_model):
+            if self.embedder is None:
+                self.embedder = MultimodalEmbedder(
+                    model_path=embedder_model, dim=embed_dim, device=device,
+                )
+                self.embedder._ensure_loaded()
             self.vstore = VectorStore(
                 persist_dir=chroma_dir,
                 embedding_function=self.embedder.as_chromadb_embedding_function(),
@@ -155,7 +159,7 @@ class QueryService:
 
     def close(self) -> None:
         """Release GPU + DB resources."""
-        if self.embedder is not None:
+        if self.embedder is not None and self._own_embedder:
             self.embedder.unload()
         self.llm.unload()
         self.store.close()
