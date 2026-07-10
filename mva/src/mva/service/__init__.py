@@ -3,3 +3,7 @@
 集成缝：OmniUAV 经本地 RPC 调用；MVA 独占 DuckDB+ChromaDB。
 详见 docs/superpowers/specs/2026-07-10-omniuav-mva-integration-design.md
 """
+from mva.service.app import create_app          # noqa: E402
+from mva.service.engine import AnalysisEngine    # noqa: E402
+
+__all__ = ["create_app", "AnalysisEngine"]
