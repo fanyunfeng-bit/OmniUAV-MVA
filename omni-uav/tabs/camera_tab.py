@@ -430,8 +430,9 @@ class MultiUavCameraTab(QtWidgets.QWidget):
             if stream:
                 image = stream.get_latest()
                 if image:
-                    # Store frame in buffer for multi-frame analysis
-                    if self.frame_buffer is not None:
+                    # [MOD 2026-07-10 | 帧率对齐] 仅当本 tick 该流真正前进了才入缓冲，避免节流时重复帧灌满 buffer
+                    cam_id = self.uav_cam_map.get(uav_id)
+                    if self.frame_buffer is not None and cam_id in getattr(self, "_advanced_cams", set()):
                         self.frame_buffer.add_frame(uav_id, image)
 
                     # Apply detection and tracking if enabled
@@ -442,8 +443,14 @@ class MultiUavCameraTab(QtWidgets.QWidget):
             widget.update_frame(caption)
 
     def _advance_streams(self):
-        for stream in self.video_streams.values():
-            stream.read()
+        # [MOD 2026-07-10 | 帧率对齐] 记录本 tick 哪些流真正前进了(read 返回非 None)，供 _tick 决定是否入缓冲
+        self._advanced_cams = set()
+        for cam_id, stream in self.video_streams.items():
+            try:
+                if stream.read() is not None:
+                    self._advanced_cams.add(cam_id)
+            except Exception:  # noqa: BLE001
+                pass
 
     def _get_stream_for_uav(self, uav_id: str) -> Optional[StreamBase]:
         cam_id = self.uav_cam_map.get(uav_id)
