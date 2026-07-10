@@ -31,6 +31,9 @@ class CameraSource:
 
 
 class MultiUavCameraTab(QtWidgets.QWidget):
+    # [MOD 2026-07-10 | ingest触发] 请求把当前文件夹当一个 scene 入库到 MVA。参数:(dataset_root, scene)
+    ingest_requested = QtCore.pyqtSignal(str, str)
+
     def __init__(
         self,
         data_dir: Path,
@@ -138,6 +141,14 @@ class MultiUavCameraTab(QtWidgets.QWidget):
         self.video_dir_btn.clicked.connect(self._select_video_dir)
         local_file_layout.addWidget(self.video_dir_label)
         local_file_layout.addWidget(self.video_dir_btn)
+        # [MOD 2026-07-10 | ingest触发] 可选:把当前文件夹作为一个场景入库到 MVA 分析引擎
+        self.ingest_btn = QtWidgets.QPushButton("入库到分析引擎")
+        self.ingest_btn.setToolTip(
+            "把当前文件夹作为一个场景送入 MVA(检测/跟踪/嵌入)，之后可对它做 grounded 问答。\n"
+            "每个视频文件视为一个视角。需先启动 sidecar 引擎。"
+        )
+        self.ingest_btn.clicked.connect(self._request_ingest)
+        local_file_layout.addWidget(self.ingest_btn)
         control_panel.addWidget(self.local_file_widget)
 
         # ROS Live controls (hidden by default)
@@ -590,6 +601,16 @@ class MultiUavCameraTab(QtWidgets.QWidget):
             print(f"Found {len(video_files)} video(s): {', '.join(video_names)}")
 
         self._set_data_dir(new_dir)
+
+    def _request_ingest(self):
+        # [MOD 2026-07-10 | ingest触发] 当前文件夹当一个 pcl-sim scene: root=父目录, scene=目录名
+        d = Path(self.data_dir)
+        if not self._find_video_files(d):
+            QtWidgets.QMessageBox.warning(
+                self, "无可入库视频", "当前文件夹没有可入库的视频文件(每个视频=一个视角)。"
+            )
+            return
+        self.ingest_requested.emit(str(d.parent), d.name)
 
     def _on_source_type_changed(self, index: int):
         """Handle source type combo box change."""

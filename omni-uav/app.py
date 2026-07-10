@@ -114,6 +114,8 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         # Pass LLM client to camera tab for command parsing fallback
         self.camera_tab.parent_llm_client = self.llm_client
+        # [MOD 2026-07-10 | ingest触发] 相机 tab 的"入库"按钮 → MainWindow 调 sidecar 入库
+        self.camera_tab.ingest_requested.connect(self._on_ingest_requested)
         tabs.addTab(self.camera_tab, "多无人机镜头")
         tabs.addTab(PlyMeshTab(data_dir=data_dir, output_mesh=tsdf_mesh), "场景重建")
         self.evaluation_tab = EvaluationTab(llm_client=self.llm_client, system_output=self.system_output)
@@ -592,6 +594,44 @@ Return JSON only:"""
         # [MOD 2026-07-10 | P0] 周期探活 MVA sidecar，更新状态灯 + _engine_alive(问答路由用)
         self._engine_alive = self.mva_client.is_alive()
         self.engine_status_label.setText("引擎●已连接" if self._engine_alive else "引擎○未连接")
+
+    def _on_ingest_requested(self, dataset_root: str, scene: str):
+        # [MOD 2026-07-10 | ingest触发] 把当前文件夹作为 pcl-sim scene 送入 sidecar 入库
+        if not getattr(self, "_engine_alive", False):
+            self.system_output.appendPlainText("[入库] 引擎未连接，无法入库(请先启动 sidecar 引擎)。")
+            return
+        cfg = {"dataset_root": dataset_root, "segments_per_view": 4}
+        yolo = "/home/fyf/fyf/PCL/Multi-Video-Analysis/yolo11n.pt"  # 已有权重，免下载
+        if os.path.exists(yolo):
+            cfg["detect_model"] = yolo
+        try:
+            job = self.mva_client.ingest_start(source=scene, dataset="pcl-sim", config=cfg)
+        except Exception as e:  # noqa: BLE001
+            self.system_output.appendPlainText(f"[入库] 触发失败: {e}")
+            return
+        self._ingest_job = job
+        self.system_output.appendPlainText(f"[入库] 已开始: scene={scene} (job={job})，处理中…")
+        self._ingest_timer = QtCore.QTimer(self)
+        self._ingest_timer.timeout.connect(self._poll_ingest)
+        self._ingest_timer.start(2000)
+
+    def _poll_ingest(self):
+        # [MOD 2026-07-10 | ingest触发] 轮询入库状态，完成/失败时收尾(running 静默，状态灯已反映引擎)
+        try:
+            st = self.mva_client.ingest_status(self._ingest_job)
+        except Exception as e:  # noqa: BLE001
+            self.system_output.appendPlainText(f"[入库] 查询状态失败: {e}")
+            self._ingest_timer.stop()
+            return
+        state = st.get("state")
+        if state == "done":
+            self.system_output.appendPlainText(
+                f"[入库] 完成 ✓ 段数={st.get('processed_segments')}。现在可对该场景做 grounded 问答。"
+            )
+            self._ingest_timer.stop()
+        elif state == "error":
+            self.system_output.appendPlainText(f"[入库] 失败: {st.get('error')}")
+            self._ingest_timer.stop()
 
     def _execute_regular_query(self):
         """Execute regular LLM query (non-tracking)."""
