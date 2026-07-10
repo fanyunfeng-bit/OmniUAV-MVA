@@ -1,6 +1,9 @@
-"""真实引擎：QueryService(本地嵌入 + 云端 LLM) + mva ingest(子进程) + 任务表。"""
+"""真实引擎：QueryService(本地嵌入 + 云端 LLM) + 进程内 ingest + 任务表。
+
+入库在 sidecar 进程内进行(复用 QueryService 已加载的 store/embedder/vstore)，
+避开 DuckDB 跨进程读写锁、也免得重复加载 16G 嵌入模型。
+"""
 from __future__ import annotations
-import subprocess
 import threading
 import uuid
 from typing import Callable, Optional
@@ -20,29 +23,6 @@ class _IngestJob:
         self.stop_flag = threading.Event()
 
 
-def _default_subprocess_runner(req: IngestRequest, progress: ProgressCb) -> None:
-    """默认入库：子进程跑已测的 `mva ingest` CLI。
-    ⚠️ 执行前先 `mva ingest --help` 确认 dataset/scene/db/chroma 的确切 flag，
-    据此微调下面命令拼装(这里给常见形态)。"""
-    cfg = req.config or {}
-    cmd = ["mva", "ingest"]
-    if req.dataset:
-        cmd += ["--dataset", req.dataset]
-    cmd += ["--scene", req.source]
-    if "db" in cfg:
-        cmd += ["--db", cfg["db"]]
-    if "chroma_dir" in cfg:
-        cmd += ["--chroma-dir", cfg["chroma_dir"]]
-    if "embedder_model" in cfg:
-        cmd += ["--embedder-model", cfg["embedder_model"]]
-    cmd += ["--detect", "--track"]
-    progress(processed_segments=0)
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise RuntimeError(f"mva ingest 失败: {proc.stderr[-2000:]}")
-    progress(processed_segments=1, total_segments=1)
-
-
 class AnalysisEngine:
     def __init__(
         self,
@@ -56,7 +36,8 @@ class AnalysisEngine:
     ) -> None:
         self.db_path = db_path
         self.chroma_dir = chroma_dir
-        self._runner = ingest_runner or _default_subprocess_runner
+        self.device = device
+        self._runner = ingest_runner or self._inprocess_ingest
         self._jobs: dict[str, _IngestJob] = {}
         self._lock = threading.Lock()
         self._svc = None
@@ -71,6 +52,52 @@ class AnalysisEngine:
             from mva.cli.query import QueryService
             self._svc = QueryService(**self._svc_kwargs)
         return self._svc
+
+    def _inprocess_ingest(self, req: IngestRequest, progress: ProgressCb) -> None:
+        """进程内入库：复用 sidecar 已加载的 store/embedder/vstore(避 DuckDB 锁 + 免重载嵌入)。
+
+        config 可含: dataset_root, views, window_sec, stride_sec, nframes_per_segment,
+        segments_per_view(0=全部), detect(bool), detect_model, detect_conf, tracker。
+        """
+        svc = self._ensure_service()
+        if getattr(svc, "embedder", None) is None or getattr(svc, "vstore", None) is None:
+            raise RuntimeError("sidecar 未加载嵌入/向量库：入库需带 --chroma-dir 启动 sidecar")
+
+        from mva.datasets import get_adapter
+        from mva.segmentation import SegmenterConfig
+        from mva.cli.ingest import ingest_scene
+
+        cfg = req.config or {}
+        adapter = get_adapter(req.dataset or "pcl-sim", root=cfg.get("dataset_root"))
+        scene = adapter.get_scene(req.source)
+        view_ids = cfg.get("views") or scene.view_ids
+        seg = SegmenterConfig(
+            window_sec=float(cfg.get("window_sec", 10.0)),
+            stride_sec=float(cfg.get("stride_sec", 10.0)),
+            nframes_per_segment=int(cfg.get("nframes_per_segment", 4)),
+        )
+
+        detector = None
+        if cfg.get("detect", True):
+            from mva.l1_perception import Detector
+            detector = Detector(
+                model_name=cfg.get("detect_model", "yolo11n.pt"),
+                conf=float(cfg.get("detect_conf", 0.25)),
+                device=cfg.get("detect_device") or self.device,
+            )
+
+        spv = cfg.get("segments_per_view", 4)
+        progress(processed_segments=0)
+        stats = ingest_scene(
+            adapter=adapter, scene_id=req.source, view_ids=view_ids, config=seg,
+            embedder=svc.embedder, detector=detector, embed_bboxes=True,
+            store=svc.store, vstore=svc.vstore,
+            segments_per_view=(float("inf") if spv in (0, None) else float(spv)),
+            track=bool(cfg.get("track", True)),
+            tracker_algorithm=cfg.get("tracker", "iou_greedy"),
+        )
+        progress(processed_segments=int(stats.get("segments", 0)),
+                 total_segments=int(stats.get("segments", 0)))
 
     def health(self) -> HealthResponse:
         return HealthResponse(engine_ready=self._svc is not None, db_path=self.db_path)
