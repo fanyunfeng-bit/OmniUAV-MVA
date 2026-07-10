@@ -10,7 +10,18 @@ MVA_PY=${MVA_PY:-/home/fyf/miniconda3/envs/mva/bin/python}
 DB=${MVA_DB:-/tmp/mva/world.duckdb}
 CHROMA=${MVA_CHROMA-/tmp/mva/chroma}     # 用 - : 允许显式空串跳过 chroma
 LOGDIR=/tmp/sim_live_logs; mkdir -p "$LOGDIR" "$(dirname "$DB")"
-: "${DASHSCOPE_API_KEY:?请先 export DASHSCOPE_API_KEY=<你的key>}"
+
+# API key：优先用环境变量；没有就从本地(gitignore 的)配置自动读取，免得每次手动 export。
+if [ -z "${DASHSCOPE_API_KEY:-}" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  for CFG in "$SCRIPT_DIR/../omni-uav/configs/config.json" "$SCRIPT_DIR/../omni-uav/configs/config_llm.yaml"; do
+    if [ -f "$CFG" ]; then
+      K=$(grep -oE 'sk-[A-Za-z0-9]{20,}' "$CFG" | head -1)
+      [ -n "$K" ] && { export DASHSCOPE_API_KEY="$K"; echo "已从 $(basename "$CFG") 读取 API key"; break; }
+    fi
+  done
+fi
+: "${DASHSCOPE_API_KEY:?未找到 key：请 export DASHSCOPE_API_KEY，或把 key 写进 omni-uav/configs/config.json}"
 
 if ( ss -ltn 2>/dev/null || netstat -ltn 2>/dev/null ) | grep -q ":8900"; then
   echo "sidecar 已在运行 (:8900)"; exit 0
