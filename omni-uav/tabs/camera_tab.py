@@ -1051,6 +1051,27 @@ class MultiUavCameraTab(QtWidgets.QWidget):
                 f"无法加载视频文件:\n{str(e)}"
             )
 
+    def seek_to(self, cam_id: str, t_sec: float):
+        # [MOD 2026-07-10 | P1 跳帧] 检索命中跳转:把该 cam 的视频流 seek 到 t_sec，并切单视图
+        stream = self.video_streams.get(cam_id)
+        if stream is None:
+            print(f"[seek] 无该镜头流: {cam_id}")
+            return
+        cap = getattr(stream, "cap", None)   # VideoStream.cap = cv2.VideoCapture
+        if cap is not None:
+            try:
+                import cv2
+                cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, float(t_sec)) * 1000.0)
+            except Exception as e:  # noqa: BLE001
+                print(f"[seek] 失败: {e}")
+        # 切到单视图看该镜头(view_mode: 0=单视图)
+        try:
+            self.view_mode.setCurrentIndex(0)
+            uav = next(u for u, c in self.uav_cam_map.items() if c == cam_id)
+            self.uav_combo.setCurrentIndex(self.uav_ids.index(uav))
+        except Exception:  # noqa: BLE001
+            pass
+
     def _set_data_dir(self, new_dir: Path):
         for stream in self.video_streams.values():
             stream.close()
