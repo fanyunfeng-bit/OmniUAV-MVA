@@ -10,8 +10,11 @@
 
 ## Global Constraints
 
-- **两个 git 仓库**：MVA = `/home/fyf/fyf/PCL/Multi-Video-Analysis`；OmniUAV = `/home/fyf/fyf/PCL/Simulation-System/omni-uav`。各自提交。
-- **非 git 区**：父目录 `/home/fyf/fyf/PCL/Simulation-System` 不是 git 仓库 → 其下启动脚本改动**不 commit**，改为在 `Simulation-System/MODIFICATIONS.md` 追加记录 + 代码 `# [MOD 日期]` 注释。
+- **单一 monorepo**（2026-07-10 起）：`/home/fyf/fyf/PCL/OmniUAV-MVA`（remote `git@github.com:fanyunfeng-bit/OmniUAV-MVA.git`）。**所有改动都提交到这里**，与旧 MVA(main)/omni-uav(dev_wenjj) 无关。
+  - MVA 代码在 `OmniUAV-MVA/mva/`（`import mva` 已 `pip install -e` 指向此处）；OmniUAV 在 `OmniUAV-MVA/omni-uav/`；脚本在 `OmniUAV-MVA/scripts/`。
+  - **计划正文里旧的绝对路径 `/home/fyf/fyf/PCL/Multi-Video-Analysis/...` → `OmniUAV-MVA/mva/...`；`/home/fyf/fyf/PCL/Simulation-System/omni-uav/...` → `OmniUAV-MVA/omni-uav/...`；git 命令一律 `cd /home/fyf/fyf/PCL/OmniUAV-MVA`。**
+  - MVA 命令用 `/home/fyf/miniconda3/envs/mva/bin/python`。**每次提交前跑密钥硬门**：`git grep --cached -nE "sk-[A-Za-z0-9]{20,}"` 必须为空。
+  - Task 10 的启停脚本放 `OmniUAV-MVA/scripts/`（已入库，正常 commit）。
 - **MVA 测试**：`pytest`（`pyproject.toml`: `testpaths=["tests"]`, `pythonpath=["src"]`）。重/GPU 用 `@pytest.mark.gpu`；日常 `pytest -m "not gpu"`。**本 P0 新测试必须无 GPU、无网络下可过**（用 Fake/mock）。
 - **嵌入(生产)**：本地 `Qwen/Qwen3-VL-Embedding-8B`（768 维 MRL）；测试用 mock（`model_path=None`）。
 - **问答(生产)**：云端 DashScope `qwen3-vl-plus`，兼容端点 `https://dashscope.aliyuncs.com/compatible-mode/v1`。**key 从环境变量 `DASHSCOPE_API_KEY` 读，禁止写死/提交**。
