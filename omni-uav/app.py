@@ -59,6 +59,11 @@ def parse_temporal_scope(text):
     return None
 
 
+# [MOD 2026-07-10 | P0 grounded问答] 问答路由判定：引擎在→走 MVA sidecar，否则本地降级。
+def decide_qa_route(engine_alive: bool) -> str:
+    return "sidecar" if engine_alive else "local"
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, data_dir: Path):
         super().__init__()
@@ -72,6 +77,16 @@ class MainWindow(QtWidgets.QMainWindow):
             base_url=config_llm.get("LLM_BASE_URL"),
             api_key=config_llm.get("LLM_API_KEY"),
         )
+        # [MOD 2026-07-10 | P0] MVA sidecar 客户端 + 引擎状态灯(仅问答用；指令分支不受影响)
+        from utils.mva_client import MvaClient
+        self.mva_client = MvaClient()
+        self._engine_alive = False
+        self.engine_status_label = QtWidgets.QLabel("引擎:检测中…")
+        self.statusBar().addPermanentWidget(self.engine_status_label)
+        self._engine_timer = QtCore.QTimer(self)
+        self._engine_timer.timeout.connect(self._refresh_engine_status)
+        self._engine_timer.start(5000)
+        self._refresh_engine_status()
         self.llm_worker = None
         self.llm_queue: List[Tuple[str, List[str]]] = []
         self.frame_store_dir = Path(__file__).resolve().parent / "paused_frames"
@@ -573,9 +588,27 @@ Return JSON only:"""
                 pass
         return uav_ids
 
+    def _refresh_engine_status(self):
+        # [MOD 2026-07-10 | P0] 周期探活 MVA sidecar，更新状态灯 + _engine_alive(问答路由用)
+        self._engine_alive = self.mva_client.is_alive()
+        self.engine_status_label.setText("引擎●已连接" if self._engine_alive else "引擎○未连接")
+
     def _execute_regular_query(self):
         """Execute regular LLM query (non-tracking)."""
         print(f"[DEBUG] _execute_regular_query called (NOT a tracking command)")
+        # [MOD 2026-07-10 | P0] 问答分支路由：引擎在→MVA grounded 问答；失败/不在→落到原本地路径降级
+        if decide_qa_route(getattr(self, "_engine_alive", False)) == "sidecar":
+            try:
+                result = self.mva_client.answer(self._original_user_prompt)
+                ans = result.get("answer", "")
+                g = result.get("groundings") or []
+                src = ("  [溯源] " + ", ".join(
+                    f"{x.get('view_id')}@{x.get('t')}" for x in g)) if g else ""
+                self.llm_output.append(f"[grounded] {ans}{src}")
+                return
+            except Exception as e:                        # noqa: BLE001
+                print(f"[P0] sidecar 问答失败，降级本地: {e}")
+                # 不 return，继续走下面原有本地路径
         self.llm_output.append("处理中...")
         self.llm_output.append("")
 
