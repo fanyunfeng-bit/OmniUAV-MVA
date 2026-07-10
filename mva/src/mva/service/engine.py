@@ -151,3 +151,30 @@ class AnalysisEngine:
         except Exception:                                # noqa: BLE001
             plan = None
         return AnswerResponse(answer=result.answer, groundings=[], plan=plan)
+
+    def retrieve(self, req):
+        # [P1] 段级检索:vstore.query → 富化段时间 → top-1 抽缩略图
+        from mva.service.models import RetrieveResponse, RetrieveHit
+        from mva.service.retrieval import parse_hits, enrich_segment_time
+        from mva.service.thumbnails import extract_frame
+        svc = self._ensure_service()
+        if getattr(svc, "vstore", None) is None:
+            return RetrieveResponse(hits=[], n_vectors_searched=0)
+        n_total = svc.vstore.collection.count()
+        raw = svc.vstore.query(query_text=req.text, vector_type=req.vector_type,
+                               top_k=int(req.top_k))
+        hits = [enrich_segment_time(h, svc.store) for h in parse_hits(raw)]
+        out = []
+        for i, h in enumerate(hits):
+            thumb = None
+            if i == 0 and h.get("source_uri") and h.get("t") is not None:
+                import hashlib
+                key = hashlib.md5(f"{h['source_uri']}:{h['t']}".encode()).hexdigest()[:10]
+                thumb = extract_frame(h["source_uri"], float(h["t"]),
+                                      f"/tmp/mva_thumbs/{key}.jpg")
+            out.append(RetrieveHit(
+                view_id=h["view_id"], t=h.get("t"), segment_idx=h.get("segment_idx"),
+                score=h["score"], kind=h["kind"], class_name=h.get("class_name"),
+                doc=h.get("doc"), thumbnail_path=thumb,
+            ))
+        return RetrieveResponse(hits=out, n_vectors_searched=n_total)

@@ -32,3 +32,11 @@ class FakeEngine:
             AnswerResponse(answer=f"echo:{req.query}",
                            groundings=[Grounding(view_id="view1", t=1.0)]),
         )
+
+    def retrieve(self, req):
+        from mva.service.models import RetrieveResponse, RetrieveHit
+        return RetrieveResponse(
+            hits=[RetrieveHit(view_id="view1", t=0.0, segment_idx=0, score=0.9,
+                              kind="segment", thumbnail_path="/tmp/thumb.jpg")],
+            n_vectors_searched=28,
+        )

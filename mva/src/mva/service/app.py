@@ -3,6 +3,7 @@ from fastapi import FastAPI, Response
 from mva.service.models import (
     EngineProtocol, HealthResponse, AnswerRequest, AnswerResponse,
     IngestRequest, IngestStartResponse, IngestStatusResponse,
+    RetrieveRequest, RetrieveResponse,
 )
 
 
@@ -30,5 +31,9 @@ def create_app(engine: EngineProtocol) -> FastAPI:
     def ingest_stop(job: str) -> Response:
         engine.ingest_stop(job)
         return Response(status_code=204)
+
+    @app.post("/retrieve", response_model=RetrieveResponse)
+    def retrieve(req: RetrieveRequest) -> RetrieveResponse:
+        return engine.retrieve(req)
 
     return app
