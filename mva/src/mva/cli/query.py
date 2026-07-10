@@ -62,6 +62,7 @@ class QueryService:
         quantization: Optional[str] = None,
         device: Optional[str] = None,
         enable_cross_view: bool = True,
+        llm=None,
     ) -> None:
         self.db_path = db_path
         self.chroma_dir = chroma_dir
@@ -85,7 +86,11 @@ class QueryService:
             )
 
         # Construct the gen LLM (lazy-loads on first .complete())
-        self.llm = LLMClient(model_path=llm_model, quantization=quantization)
+        # 允许注入自定义生成 LLM(如云端 DashScopeLLMClient)；否则用本地 LLMClient。
+        if llm is not None:
+            self.llm = llm
+        else:
+            self.llm = LLMClient(model_path=llm_model, quantization=quantization)
 
         # Wire up orchestrator
         self.registry = build_default_registry(

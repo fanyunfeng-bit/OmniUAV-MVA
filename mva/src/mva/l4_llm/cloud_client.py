@@ -51,6 +51,10 @@ class DashScopeLLMClient:
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
+    def unload(self) -> None:
+        """与本地 LLMClient 接口一致；云端无本地资源，空实现(供 QueryService.close() 调用)。"""
+        return None
+
     def complete(self, prompt: str, images: Optional[list[np.ndarray]] = None,
                  max_new_tokens: int = 256) -> str:
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
