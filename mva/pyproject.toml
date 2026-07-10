@@ -34,7 +34,8 @@ llm = [
 storage = ["duckdb>=1.0", "chromadb>=0.5"]
 ui = ["gradio>=4.0,<6.0"]
 dev = ["pytest>=7.4", "pytest-cov"]
-all = ["mva[detection,llm,storage,ui,dev]"]
+service = ["fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27", "requests>=2.31"]
+all = ["mva[detection,llm,storage,ui,dev,service]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
