@@ -7,8 +7,10 @@
 #   MVA_CHROMA  ChromaDB 目录 (默认 /tmp/mva/chroma；设为空串 "" 则不加载嵌入, 轻量启动)
 set -u
 MVA_PY=${MVA_PY:-/home/fyf/miniconda3/envs/mva/bin/python}
-DB=${MVA_DB:-/tmp/mva/world.duckdb}
-CHROMA=${MVA_CHROMA-/tmp/mva/chroma}     # 用 - : 允许显式空串跳过 chroma
+# 默认用持久位置 ~/.omniuav-mva（重启不丢；GUI 入库/检索/问答都用这同一个库）。
+# 想换库再显式设 MVA_DB / MVA_CHROMA。
+DB=${MVA_DB:-$HOME/.omniuav-mva/world.duckdb}
+CHROMA=${MVA_CHROMA-$HOME/.omniuav-mva/chroma}   # 用 - : 允许显式空串跳过 chroma
 LOGDIR=/tmp/sim_live_logs; mkdir -p "$LOGDIR" "$(dirname "$DB")"
 
 # API key：优先用环境变量；没有就从本地(gitignore 的)配置自动读取，免得每次手动 export。
