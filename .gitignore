@@ -1,0 +1,62 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+build/
+dist/
+
+# ===== 机密：本地保留，绝不提交 =====
+# API key 走环境变量 DASHSCOPE_API_KEY；本地配置文件不入库
+omni-uav/configs/config_llm.yaml
+omni-uav/configs/config.json
+**/config_llm.yaml
+**/params.yaml
+*.key
+*.pem
+
+# ===== 模型权重 / 大文件 =====
+*.pt
+*.ts
+*.onnx
+*.bin
+*.safetensors
+*.pth
+*.gguf
+
+# ===== 世界状态 / 向量库 =====
+*.duckdb
+*.duckdb.wal
+chroma/
+*-chroma/
+*-rois/
+
+# ===== MVA 大目录（源码外的产物/数据，留在原处不入库）=====
+mva/DATASETS/
+mva/runs/
+mva/data/
+mva/.gstack/
+
+# ===== OmniUAV 生成/数据 =====
+omni-uav/checkpoints/
+omni-uav/outputs/
+omni-uav/paused_frames/
+omni-uav/logs/
+omni-uav/examples/
+
+# ===== 媒体 =====
+*.mp4
+*.avi
+*.mov
+*.bag
+*.db3
+
+# ===== OS / 编辑器 =====
+.DS_Store
+*.swp
+.idea/
+.vscode/

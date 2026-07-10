@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mva"
+version = "0.0.1"
+description = "Multi-Video-Analysis: multi-drone multi-view video understanding + multimodal LLM"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "PCL"}]
+dependencies = [
+    "pydantic>=2.0",
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "scipy>=1.10",
+]
+
+[project.scripts]
+mva = "mva.cli.__main__:main"
+
+[project.optional-dependencies]
+detection = ["ultralytics>=8.2", "boxmot>=10.0"]
+llm = [
+    "transformers>=4.45",
+    "torch>=2.1",
+    "accelerate>=0.30",
+    "qwen-vl-utils",
+    "pillow>=10.0",
+    "sentence-transformers>=2.5",
+    "bitsandbytes>=0.43",
+    "decord>=0.6",
+]
+storage = ["duckdb>=1.0", "chromadb>=0.5"]
+ui = ["gradio>=4.0,<6.0"]
+dev = ["pytest>=7.4", "pytest-cov"]
+all = ["mva[detection,llm,storage,ui,dev]"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra -q"
+markers = [
+    "gpu: marks tests that require GPU / heavy ML deps (deselect with '-m \"not gpu\"')",
+]
+filterwarnings = [
+    # Gradio 5.x emits these even after we explicitly opt-in to the future
+    # default (allow_tags=False). Forward-compat heads-ups, not our bugs.
+    "ignore:The default value of 'allow_tags':DeprecationWarning",
+]
