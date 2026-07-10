@@ -45,3 +45,12 @@ class MvaClient:
                          timeout=self.timeout)
         r.raise_for_status()
         return r.json()
+
+    def retrieve(self, text=None, image_path=None, top_k: int = 3,
+                 vector_type: str = "frame") -> dict[str, Any]:
+        r = self._s.post(f"{self.base_url}/retrieve",
+                         json={"text": text, "image_path": image_path,
+                               "top_k": top_k, "vector_type": vector_type},
+                         timeout=self.timeout)
+        r.raise_for_status()
+        return r.json()
