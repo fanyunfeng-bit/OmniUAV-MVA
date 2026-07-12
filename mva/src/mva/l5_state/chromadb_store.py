@@ -193,7 +193,13 @@ class VectorStore:
         if vector_type is not None:
             clauses.append({"vector_type": vector_type})
         if view_id is not None:
-            clauses.append({"view_id": view_id})
+            # Ingest writes BOTH `view_id` (=scene::view, prefixed) and
+            # `view_id_raw` (=view). Callers pass the RAW view id (e.g.
+            # 'cam02' from the planner), so match either form — otherwise a
+            # raw id never matches the prefixed metadata and view-scoped
+            # tools (look_at / find_by_description) silently return nothing.
+            clauses.append({"$or": [{"view_id": view_id},
+                                    {"view_id_raw": view_id}]})
         if extra:
             if "$and" in extra:
                 clauses.extend(extra["$and"])
