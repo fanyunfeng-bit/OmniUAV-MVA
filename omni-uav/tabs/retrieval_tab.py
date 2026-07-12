@@ -50,9 +50,10 @@ class RetrievalTab(QtWidgets.QWidget):
     def render(self, res: dict):
         hits = res.get("hits") or []
         n = res.get("n_vectors_searched", 0)
-        self.transparency_label.setText(
-            f"检索透明化:查了 {n} 个向量 · 命中 {len(hits)} 条(显示 top-{min(3, len(hits))})"
-        )
+        base = (f"检索透明化:查了 {n} 个向量 · 命中 {len(hits)} 条"
+                f"(显示 top-{min(3, len(hits))})")
+        extra = self._format_applied(res.get("applied"))
+        self.transparency_label.setText(base + (("\n" + extra) if extra else ""))
         self.results_list.clear()
         for i, h in enumerate(hits[:3]):
             cls = f" · {h.get('class_name')}" if h.get("class_name") else ""
@@ -79,3 +80,30 @@ class RetrievalTab(QtWidgets.QWidget):
         data = item.data(QtCore.Qt.UserRole)
         if data and data[1] is not None:
             self.jump_requested.emit(str(data[0]), float(data[1]))
+
+    @staticmethod
+    def _format_applied(applied) -> str:
+        """把后端 applied 约束渲染成一行人读透明化；无约束返回空串。"""
+        if not applied:
+            return ""
+        parts = []
+        if applied.get("view_id"):
+            parts.append(f"视角 {applied['view_id']}")
+        ts, te = applied.get("time_start"), applied.get("time_end")
+        if ts is not None or te is not None:
+            a = f"{ts:.0f}" if isinstance(ts, (int, float)) else "…"
+            b = f"{te:.0f}" if isinstance(te, (int, float)) else "…"
+            parts.append(f"时间 {a}–{b}s")
+        src_cn = {"rule": "规则", "llm": "LLM"}.get(applied.get("source", "none"), "")
+        if not parts and not src_cn:
+            return ""                       # 纯语义查询：不加额外行
+        line = "已限定 " + " · ".join(parts) if parts else "语义检索"
+        sem = applied.get("semantic_text")
+        if sem:
+            line += f' · 语义"{sem}"'
+        if src_cn:
+            line += f"({src_cn})"
+        if applied.get("fell_back"):
+            vid = applied.get("view_id") or "该约束"
+            line += f" — {vid} 无命中，已扩展到全部"
+        return line
