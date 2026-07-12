@@ -1,0 +1,79 @@
+# 变更记录 (MODIFICATIONS)
+
+本文件汇总 OmniUAV-MVA 集成过程中的所有改动，便于查验与回溯。
+每条带 commit 短哈希；代码内同时用 `# [MOD 日期]` 注释标注。
+设计依据见 `docs/superpowers/specs/2026-07-10-omniuav-mva-integration-design.md`；
+实现计划见 `docs/superpowers/plans/`。
+
+> 仓库：`git@github.com:fanyunfeng-bit/OmniUAV-MVA.git`（monorepo：`omni-uav/` 前端 + `mva/` 引擎）。
+> ⚠️ 安全：DashScope API key 只存本地 `omni-uav/configs/config_llm.yaml`/`config.json`（gitignore，不入库）；启动脚本运行时自动读取。
+
+---
+
+## 0. 仓库搭建
+- `2f2ed52` 初始化 monorepo：拷入 omni-uav 前端 + MVA 源码(`mva/`) + 设计文档；`.gitignore` 屏蔽密钥/权重/数据/媒体。
+
+## 1. P0 —— MVA sidecar 骨架 + grounded 问答
+架构：MVA 以本地 sidecar(FastAPI :8900)运行，独占世界状态 DuckDB+ChromaDB；OmniUAV 经 RPC 调用。问答统一走 sidecar(引擎掉线本地降级)，指令(跟踪/检测/重建)留在 OmniUAV。
+- `ceff5a0` service 依赖 + RPC 模型(`mva/service/models.py`) + `EngineProtocol`
+- `f642e7e` FastAPI 工厂 + `/health`
+- `3d94f9a` `POST /answer`
+- `9766a78` `/ingest/{start,status,stop}`
+- `5238cba` **DashScope 云端 LLM 适配器**(`mva/l4_llm/cloud_client.py`, qwen3-vl-plus)
+- `311e9bd` `QueryService` 支持注入生成 LLM(用云端 LLM 做问答)
+- `fe92635` `AnalysisEngine`(QueryService + 入库任务表) + uvicorn 入口
+- `0f4045a` OmniUAV `MvaClient`(RPC 客户端)
+- `bf624f9` OmniUAV 问答分支路由 sidecar + 本地降级 + 引擎状态灯
+- `e755ccc` sidecar 启停脚本(`scripts/start_mva_sidecar.sh` / `stop_mva_sidecar.sh`)
+
+## 2. 进程内入库 + GUI 触发
+- `463cc09` **进程内 ingest**：复用 sidecar 已加载的 store/embedder/vstore，避开 DuckDB 跨进程锁、免重载 16G 嵌入。
+- `834962a` OmniUAV **"入库到分析引擎"按钮** + 状态轮询(选文件夹显示 / 是否入库 解耦)。
+- `c68f573` 启动脚本**自动从本地配置读 DASHSCOPE_API_KEY**，免每次手动 export。
+
+## 3. 设计文档更新
+- `54b13e2` spec 增补：**双流解耦(D10)**(语义流粗/感知流密分开取帧)、**离线优先(D11)**、检索粒度(§3.3, top-3/缩略图top-1/帧级)。
+- `b92e6c8` P1 实现计划(检索面板 + 感知流接口)。
+
+## 4. P1 —— 多视角检索面板 + 感知流接口
+- `ba3d44b` 检索 RPC 模型(`RetrieveRequest/Hit/Response`)
+- `9bdbe8f` 检索纯逻辑(解析 chroma 命中 + 从 DuckDB 富化段时间，处理 `scene::view` 前缀)
+- `a34e7ca` 抽帧缩略图 helper
+- `e735749` `/retrieve` 端点 + `Engine.retrieve`(段级 + top-1 缩略图)
+- `9da4487` `MvaClient.retrieve`
+- `8917882` **多视角检索面板**(top-3 + top-1 缩略图 + 透明化 + 跳帧信号)
+- `4a62587` `camera_tab.seek_to`(检索命中跳帧)
+- `edcc8dc` 感知流接口：`FrameSource` + `UniformFrameSource`(密集取帧基线)
+- `2b0a36f` 感知流接口：`Tracker`/`PerceptionPipeline`/`RelationModeler` + 基线(留口，未接入)
+
+## 5. 数据采集
+- `1c6a9f6` `scripts/record_airsim_4view.py`：经 rosbridge 录 4 无人机视角为本地 mp4。
+  已采：`~/OmniUAV-MVA-data/airsim_downtown_4view/cam01-04.mp4`(3 分钟, 640×480, ~3.26fps；drone2 曾卡住→cam02 近静态)。
+
+## 6. 存储/易用性
+- `dbef5c7` sidecar 默认库改为持久 `~/.omniuav-mva`(重启不丢)；后续见 §8。
+- `82ff738` **按 scene 名自动分独立库**：`<库根>/<scene>/{world.duckdb,chroma}`；`QueryService` 支持注入已加载 embedder(切库复用免重载)；`select_scene` 秒切；`/select_scene` 端点 + OmniUAV 选文件夹自动切库。
+
+## 7. 修复
+- `630fa75` **视频按原生 fps 播放**：`VideoStream` 按视频自身帧率节流(原固定 25fps 把 3.26fps 视频放快 ~7.7×)；缓冲仅收真正前进的帧。
+- `e4adf46` **无入库也能问答**：
+  - OmniUAV 把当前/时序帧作为附件一起发给 sidecar `/answer`(空世界状态也能看当前画面作答)。
+  - 修 `engine.answer` 崩溃：`Attachment.path` 需 `pathlib.Path`(取 `.name`)，原传 str 触发 `AttributeError`。
+  - OmniUAV 默认数据目录改为 `~/OmniUAV-MVA-data/airsim_downtown_4view`(不存在回退 examples)。
+
+---
+
+## 当前使用速览
+```bash
+cd /home/fyf/fyf/PCL/OmniUAV-MVA
+bash scripts/start_mva_sidecar.sh          # 自动读 key + 默认持久库 ~/.omniuav-mva
+cd omni-uav && DISPLAY=:0.0 /home/fyf/miniconda3/envs/simsys/bin/python app.py
+```
+- 镜头 tab：选文件夹→按原生帧率显示 + sidecar 切到该 scene 库；"入库"→写入该 scene 独立库。
+- 问答：没入库→模型看当前帧作答；入库后→grounded 从世界状态作答。
+- 检索 tab：文字查询→top-3 + top-1 缩略图 + 点击跳帧。
+- 停止：`bash scripts/stop_mva_sidecar.sh`
+
+## 测试
+- MVA：`cd mva && <mva-env>/python -m pytest -m "not gpu"`（547 passed）
+- OmniUAV：`cd omni-uav && QT_QPA_PLATFORM=offscreen <simsys>/python -m pytest tests/`（9 passed）
