@@ -61,6 +61,19 @@
   - 修 `engine.answer` 崩溃：`Attachment.path` 需 `pathlib.Path`(取 `.name`)，原传 str 触发 `AttributeError`。
   - OmniUAV 默认数据目录改为 `~/OmniUAV-MVA-data/airsim_downtown_4view`(不存在回退 examples)。
 
+## 8. Query 条件化检索
+设计见 `docs/superpowers/specs/2026-07-12-query-conditioned-retrieval-design.md`，
+计划见 `docs/superpowers/plans/2026-07-12-query-conditioned-retrieval.md`。
+检索时先从 query 解析「视角/时间段」约束，用剩余语义文本嵌入、用约束做 chroma 硬过滤(空则回退全库)。
+- `51bd112` 规则约束解析器(视角/时间正则 + 剩余语义文本剥离，`mva/service/query_understanding.py`)。
+- `d2675b7` LLM 兜底 + 混合解析器(`HybridConstraintParser`：规则优先，未命中且含指代才调云端)。
+- `b1e5589` 约束→where 纯函数(`resolve_view_ref` 视角数字解析 / `resolve_time` 相对末尾换算 / `build_metadata_where`，`mva/service/retrieval.py`)。
+- `223a099` `VectorStore.query` 通用 `where` 逃生口(与内建子句 `$and` 合并，不二次嵌套，`mva/l5_state/chromadb_store.py`)。
+- `61cdcec` `RetrieveResponse.applied` 透明化模型(视角/时间/语义/来源/回退，`mva/service/models.py`)。
+- `5e4fa3b` `AnalysisEngine.retrieve` 串联：硬过滤 + 空回退 + `applied`；`_scene_views`/`_scene_duration`(按 scene 缓存，切库/入库失效)。
+- `c949c7d` bbox 向量补 `start_t/end_t`(前瞻目标级时间过滤，需重新入库生效)。
+- `e5eda81` OmniUAV 检索面板展示 `applied`(如 `已限定 视角 cam01 · 语义"黄车"(规则)`；回退时提示扩展全库)。
+
 ---
 
 ## 当前使用速览
@@ -75,5 +88,5 @@ cd omni-uav && DISPLAY=:0.0 /home/fyf/miniconda3/envs/simsys/bin/python app.py
 - 停止：`bash scripts/stop_mva_sidecar.sh`
 
 ## 测试
-- MVA：`cd mva && <mva-env>/python -m pytest -m "not gpu"`（547 passed）
-- OmniUAV：`cd omni-uav && QT_QPA_PLATFORM=offscreen <simsys>/python -m pytest tests/`（9 passed）
+- MVA：`cd mva && <mva-env>/python -m pytest -m "not gpu"`（582 passed）
+- OmniUAV：`cd omni-uav && QT_QPA_PLATFORM=offscreen <simsys>/python -m pytest tests/`（13 passed）

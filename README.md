@@ -8,7 +8,7 @@
 |---|---|---|
 | grounded 问答 | ✅ | 入库后从世界状态作答(计数/跨视角等)、带溯源；未入库则模型看当前帧作答；引擎掉线本地降级 |
 | 入库(编码) | ✅ | GUI"入库"一键把当前文件夹作为一个场景送入引擎(检测/跟踪/跨视角/嵌入)，进程内进行 |
-| 多视角检索 | ✅ | 文字查询 → top-3 命中(view/时刻/分数) + top-1 缩略图 + 检索透明化 + 点击跳帧 |
+| 多视角检索 | ✅ | 文字查询→解析「视角/时间段」约束(规则优先→LLM兜底)硬过滤+空回退→top-3命中+top-1缩略图+透明化+跳帧 |
 | 按 scene 分库 | ✅ | 每个场景独立库 `~/.omniuav-mva/<scene>/`，选文件夹自动切库、互不干扰 |
 | 数据采集 | ✅ | 从 AirSim 4 无人机视角经 rosbridge 录制为本地 mp4 |
 | 视频按原生 fps 播放 | ✅ | 低帧率视频不再被放快 |
@@ -34,7 +34,7 @@ GUI 流程：
 1. **多无人机镜头** tab →「选择视频文件夹」选一个含多个 `camNN.mp4/*.mp4` 的目录(每个视频=一个视角) → 按原生帧率播放，sidecar 自动切到该场景库。
 2. 点「**入库到分析引擎**」(可选) → 该场景编码入库(进度在底部日志)。
 3. 右侧问答：未入库→模型看当前帧作答；入库后→grounded 从世界状态作答(带溯源)。
-4. **多视角检索** tab → 输入 `airplane`/`一艘船` → top-3 命中 + top-1 缩略图，点击命中跳到对应视角该帧。
+4. **多视角检索** tab → 输入 `一艘船`(全库) 或带约束的 `视角1里的黄车`/`最后10秒的车`(自动解析视角/时间段做硬过滤，命中为空再回退全库) → top-3 命中 + top-1 缩略图 + 透明化(显示已限定的视角/时间/语义)，点击命中跳到对应视角该帧。
 
 > 默认打开 `~/OmniUAV-MVA-data/airsim_downtown_4view`(若存在)，否则回退内置 `omni-uav/examples/`。
 
@@ -92,6 +92,6 @@ OmniUAV-MVA/
 ## 测试
 
 ```bash
-cd mva      && /home/fyf/miniconda3/envs/mva/bin/python -m pytest -m "not gpu" -q      # 547 passed
-cd omni-uav && QT_QPA_PLATFORM=offscreen /home/fyf/miniconda3/envs/simsys/bin/python -m pytest tests/ -q   # 9 passed
+cd mva      && /home/fyf/miniconda3/envs/mva/bin/python -m pytest -m "not gpu" -q      # 582 passed
+cd omni-uav && QT_QPA_PLATFORM=offscreen /home/fyf/miniconda3/envs/simsys/bin/python -m pytest tests/ -q   # 13 passed
 ```
