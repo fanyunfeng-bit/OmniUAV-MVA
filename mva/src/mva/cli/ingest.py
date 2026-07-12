@@ -721,6 +721,8 @@ def _add_bbox_vector(
             "classes_in_track": classes_in_track or rep_det.class_name,
             "confidence": float(rep_det.confidence),
             "source_uri": seg.source_uri,
+            "start_t": float(seg.start_t),
+            "end_t": float(seg.end_t),
         },
         document=f"{rep_det.class_name} @ {seg.view_id} seg{seg.segment_idx} "
                  f"track{track_label} (conf={rep_det.confidence:.2f}, "
