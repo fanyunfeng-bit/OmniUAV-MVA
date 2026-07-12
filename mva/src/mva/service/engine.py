@@ -181,9 +181,12 @@ class AnalysisEngine:
             job.status.state = "done"
 
     def answer(self, req: AnswerRequest) -> AnswerResponse:
+        from pathlib import Path
         from mva.contracts import Attachment, RichQuery
         svc = self._ensure_service()
-        atts = [Attachment(kind="image", path=p, label=p) for p in req.attachments]
+        # MVA 的 Attachment.path 是 pathlib.Path(会取 .name)，必须传 Path 而非 str
+        atts = [Attachment(kind="image", path=Path(p), label=Path(p).name)
+                for p in req.attachments]
         rich = RichQuery(text=req.query, attachments=atts)
         result = svc.answer(rich)
         plan = None

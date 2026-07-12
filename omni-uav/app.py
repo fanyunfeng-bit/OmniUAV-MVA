@@ -662,23 +662,10 @@ Return JSON only:"""
     def _execute_regular_query(self):
         """Execute regular LLM query (non-tracking)."""
         print(f"[DEBUG] _execute_regular_query called (NOT a tracking command)")
-        # [MOD 2026-07-10 | P0] 问答分支路由：引擎在→MVA grounded 问答；失败/不在→落到原本地路径降级
-        if decide_qa_route(getattr(self, "_engine_alive", False)) == "sidecar":
-            try:
-                result = self.mva_client.answer(self._original_user_prompt)
-                ans = result.get("answer", "")
-                g = result.get("groundings") or []
-                src = ("  [溯源] " + ", ".join(
-                    f"{x.get('view_id')}@{x.get('t')}" for x in g)) if g else ""
-                self.llm_output.append(f"[grounded] {ans}{src}")
-                return
-            except Exception as e:                        # noqa: BLE001
-                print(f"[P0] sidecar 问答失败，降级本地: {e}")
-                # 不 return，继续走下面原有本地路径
-        self.llm_output.append("处理中...")
-        self.llm_output.append("")
-
         prompt = self._original_user_prompt
+
+        # [MOD 2026-07-10 | 修复] 先收集当前/时序帧，sidecar 与本地两条路径都带上。
+        #   这样即使没入库(世界状态空)，也能把当前画面交给模型作答，而不是只回"无数据"。
         image_paths = []
         if self.include_images_cb.isChecked():
             # Check if evaluation tab has data loaded - use it as image source
@@ -687,7 +674,6 @@ Return JSON only:"""
             else:
                 # [MOD 2026-07-09 | 步骤3] 时间感知选帧：
                 #   未指定过去时刻 → 只用"当前帧"；指定了时刻/时段 → 取对应历史帧。
-                #   (原逻辑按"启用多帧分析"复选框把最近多帧一起发；现改为按问题中的时间引用决定。)
                 scope = parse_temporal_scope(prompt)
                 if scope is not None:
                     image_paths = self._get_time_scoped_frame_paths(scope)
@@ -703,6 +689,22 @@ Return JSON only:"""
                     # 默认：仅当前帧
                     image_paths = self._get_latest_frame_paths()
 
+        # [MOD 2026-07-10 | P0+修复] 问答分支路由：引擎在→MVA grounded 问答(带当前帧)；失败/不在→本地降级
+        if decide_qa_route(getattr(self, "_engine_alive", False)) == "sidecar":
+            try:
+                result = self.mva_client.answer(prompt, attachments=image_paths)
+                ans = result.get("answer", "")
+                g = result.get("groundings") or []
+                src = ("  [溯源] " + ", ".join(
+                    f"{x.get('view_id')}@{x.get('t')}" for x in g)) if g else ""
+                self.llm_output.append(f"[grounded] {ans}{src}")
+                return
+            except Exception as e:                        # noqa: BLE001
+                print(f"[P0] sidecar 问答失败，降级本地: {e}")
+                # 不 return，继续走下面原有本地路径
+
+        self.llm_output.append("处理中...")
+        self.llm_output.append("")
         self._enqueue_llm_request(prompt, image_paths)
 
     def _handle_local_tracking_command(self, tracking_description: str, target_uavs: List[str]):
@@ -1486,7 +1488,9 @@ Respond with JSON only: """
 def main():
     app = QtWidgets.QApplication(sys.argv)
     apply_dark_palette(app)
-    default_dir = Path(__file__).resolve().parent / "examples"
+    # [MOD 2026-07-10] 默认打开 airsim 采集数据；不存在则回退到内置 examples
+    airsim_dir = Path.home() / "OmniUAV-MVA-data" / "airsim_downtown_4view"
+    default_dir = airsim_dir if airsim_dir.exists() else (Path(__file__).resolve().parent / "examples")
     window = MainWindow(data_dir=default_dir)
     window.show()
     sys.exit(app.exec_())
