@@ -65,9 +65,19 @@ class RetrieveHit(BaseModel):
     thumbnail_path: Optional[str] = None # 仅 top-1 有
 
 
+class RetrieveConstraints(BaseModel):
+    view_id: Optional[str] = None        # 解析出的 raw view, 如 "cam01"; None=未限定视角
+    time_start: Optional[float] = None
+    time_end: Optional[float] = None
+    semantic_text: Optional[str] = None  # 实际用于嵌入的文本
+    source: str = "none"                 # rule | llm | none
+    fell_back: bool = False              # 约束 0 命中 → 已扩展到全库
+
+
 class RetrieveResponse(BaseModel):
     hits: list[RetrieveHit] = []
     n_vectors_searched: int = 0
+    applied: Optional[RetrieveConstraints] = None
 
 
 @runtime_checkable
