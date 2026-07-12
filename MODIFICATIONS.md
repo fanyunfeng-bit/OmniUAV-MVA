@@ -74,6 +74,17 @@
 - `c949c7d` bbox 向量补 `start_t/end_t`(前瞻目标级时间过滤，需重新入库生效)。
 - `e5eda81` OmniUAV 检索面板展示 `applied`(如 `已限定 视角 cam01 · 语义"黄车"(规则)`；回退时提示扩展全库)。
 
+## 9. 修复:视角限定问答弃答(view_id 前缀不匹配)
+- `9260e1a` **view-scoped 检索按 raw 或前缀 view_id 都能命中**。
+  根因:入库把 chroma 元数据写成 `view_id=<scene>::<view>`(前缀) + `view_id_raw=<view>`(裸),
+  但调用方(planner/`look_at`/`find_by_description`)传的是**裸** view_id(如 `cam02`)。
+  `VectorStore.query` 的 `view_id` 过滤只匹配前缀元数据 → 裸 id 匹配 0 条 →
+  问"描述视角2里的内容"时 `look_at` 以 `no_segment` 弃答(而不带 view_id 的
+  `find_segment_by_description` 却能返回 cam02 段——正是这一差异定位了根因)。
+  修复:`_build_where` 的 view_id 子句改为 `$or([view_id, view_id_raw])`,两种写法都命中。
+  真实库验证:`query(view_id="cam02")` 由 0 → 4 段;端到端 `/answer 描述视角2里的内容`
+  现返回对 cam02 画面的实际描述(城市街景/黄色出租车/公交站台/现代建筑)。
+
 ---
 
 ## 当前使用速览
