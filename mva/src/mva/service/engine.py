@@ -34,12 +34,15 @@ class AnalysisEngine:
         llm=None,
         ingest_runner: Optional[IngestRunner] = None,
         defer_query_service: bool = False,
+        parser=None,
     ) -> None:
         self.db_path = db_path
         self.chroma_dir = chroma_dir
         self.device = device
         self.embedder_model = embedder_model
         self._llm = llm
+        self._parser = parser
+        self._views_cache: Optional[list[str]] = None
         # [按 scene 分库] 库根 = 启动 db 所在目录；scene → <root>/<scene>/{world.duckdb,chroma}
         self.library_root = os.path.dirname(os.path.abspath(db_path)) if db_path else os.getcwd()
         self._current_scene: Optional[str] = None
@@ -88,8 +91,43 @@ class AnalysisEngine:
                 cur.store.close()       # 释放旧 DuckDB 读写锁；embedder 复用、不 unload
             except Exception:            # noqa: BLE001
                 pass
+        self._views_cache = None        # 切库 → 视角/时长缓存失效
         self._build_svc(db, chroma, embedder=embedder)
         self._current_scene = scene
+
+    def _get_parser(self):
+        if self._parser is None:
+            from mva.service.query_understanding import (
+                RuleBasedConstraintParser, LLMConstraintParser, HybridConstraintParser,
+            )
+            llm_parser = (LLMConstraintParser(self._llm)
+                          if self._llm is not None else None)
+            self._parser = HybridConstraintParser(
+                RuleBasedConstraintParser(), llm_parser)
+        return self._parser
+
+    def _scene_views(self) -> list[str]:
+        if self._views_cache is not None:
+            return self._views_cache
+        svc = self._ensure_service()
+        try:
+            rows = svc.store.execute_readonly("SELECT DISTINCT view_id FROM segments")
+            views = sorted({r["view_id"] for r in rows if r.get("view_id")})
+        except Exception:                                # noqa: BLE001
+            views = []
+        self._views_cache = views
+        return views
+
+    def _scene_duration(self, raw_view: Optional[str] = None) -> Optional[float]:
+        svc = self._ensure_service()
+        sql = "SELECT max(end_t) AS dur FROM segments"
+        if raw_view:
+            sql += f" WHERE view_id = '{raw_view}'"
+        try:
+            rows = svc.store.execute_readonly(sql)
+            return rows[0].get("dur") if rows else None
+        except Exception:                                # noqa: BLE001
+            return None
 
     def _inprocess_ingest(self, req: IngestRequest, progress: ProgressCb) -> None:
         """进程内入库：复用 sidecar 已加载的 store/embedder/vstore(避 DuckDB 锁 + 免重载嵌入)。
@@ -138,6 +176,7 @@ class AnalysisEngine:
         )
         progress(processed_segments=int(stats.get("segments", 0)),
                  total_segments=int(stats.get("segments", 0)))
+        self._views_cache = None        # 新入库 → 视角/时长缓存失效
 
     def health(self) -> HealthResponse:
         db = getattr(self._svc, "db_path", self.db_path) if self._svc else self.db_path
@@ -197,23 +236,43 @@ class AnalysisEngine:
         return AnswerResponse(answer=result.answer, groundings=[], plan=plan)
 
     def retrieve(self, req):
-        # [P1] 段级检索:vstore.query → 富化段时间 → top-1 抽缩略图
-        from mva.service.models import RetrieveResponse, RetrieveHit
-        from mva.service.retrieval import parse_hits, enrich_segment_time
+        # [query 条件化] 解析 view/time → chroma where 硬过滤(空则回退全库) → 嵌入剩余语义文本
+        from mva.service.models import RetrieveResponse, RetrieveHit, RetrieveConstraints
+        from mva.service.retrieval import (
+            parse_hits, enrich_segment_time,
+            resolve_view_ref, resolve_time, build_metadata_where,
+        )
         from mva.service.thumbnails import extract_frame
         svc = self._ensure_service()
         if getattr(svc, "vstore", None) is None:
             return RetrieveResponse(hits=[], n_vectors_searched=0)
         n_total = svc.vstore.collection.count()
-        raw = svc.vstore.query(query_text=req.text, vector_type=req.vector_type,
-                               top_k=int(req.top_k))
+
+        c = self._get_parser().parse(req.text or "")
+        raw_view = (resolve_view_ref(c.view_ref, self._scene_views())
+                    if c.view_ref else None)
+        duration = self._scene_duration(raw_view) if c.relative_to_end else None
+        qs, qe = resolve_time(c, duration)
+        where = build_metadata_where(raw_view, qs, qe)
+
+        query_text = c.semantic_text or req.text
+        raw = svc.vstore.query(query_text=query_text, vector_type=req.vector_type,
+                               top_k=int(req.top_k), where=where)
+        fell_back = False
+        if not raw and where is not None:
+            fell_back = True
+            raw = svc.vstore.query(query_text=query_text,
+                                   vector_type=req.vector_type,
+                                   top_k=int(req.top_k), where=None)
+
         hits = [enrich_segment_time(h, svc.store) for h in parse_hits(raw)]
         out = []
         for i, h in enumerate(hits):
             thumb = None
             if i == 0 and h.get("source_uri") and h.get("t") is not None:
                 import hashlib
-                key = hashlib.md5(f"{h['source_uri']}:{h['t']}".encode()).hexdigest()[:10]
+                key = hashlib.md5(
+                    f"{h['source_uri']}:{h['t']}".encode()).hexdigest()[:10]
                 thumb = extract_frame(h["source_uri"], float(h["t"]),
                                       f"/tmp/mva_thumbs/{key}.jpg")
             out.append(RetrieveHit(
@@ -221,4 +280,8 @@ class AnalysisEngine:
                 score=h["score"], kind=h["kind"], class_name=h.get("class_name"),
                 doc=h.get("doc"), thumbnail_path=thumb,
             ))
-        return RetrieveResponse(hits=out, n_vectors_searched=n_total)
+        applied = RetrieveConstraints(
+            view_id=raw_view, time_start=qs, time_end=qe,
+            semantic_text=query_text, source=c.source, fell_back=fell_back,
+        )
+        return RetrieveResponse(hits=out, n_vectors_searched=n_total, applied=applied)
