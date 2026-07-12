@@ -139,6 +139,7 @@ class VectorStore:
         vector_type: Optional[str] = None,
         view_id: Optional[str] = None,
         top_k: int = 10,
+        where: Optional[dict] = None,
     ) -> list[dict]:
         """Single-collection query with optional metadata filter.
 
@@ -157,10 +158,10 @@ class VectorStore:
                 "VectorStore.query requires query_vector or query_text"
             )
 
-        where = self._build_where(vector_type, view_id)
+        combined = self._build_where(vector_type, view_id, where)
         kwargs: dict[str, Any] = {"n_results": top_k}
-        if where is not None:
-            kwargs["where"] = where
+        if combined is not None:
+            kwargs["where"] = combined
         if query_vector is not None:
             kwargs["query_embeddings"] = [list(query_vector)]
         else:
@@ -184,13 +185,21 @@ class VectorStore:
 
     @staticmethod
     def _build_where(
-        vector_type: Optional[str], view_id: Optional[str]
+        vector_type: Optional[str],
+        view_id: Optional[str],
+        extra: Optional[dict] = None,
     ) -> Optional[dict]:
         clauses: list[dict] = []
         if vector_type is not None:
             clauses.append({"vector_type": vector_type})
         if view_id is not None:
             clauses.append({"view_id": view_id})
+        if extra:
+            if "$and" in extra:
+                clauses.extend(extra["$and"])
+            else:
+                for k, v in extra.items():
+                    clauses.append({k: v})
         if not clauses:
             return None
         if len(clauses) == 1:
