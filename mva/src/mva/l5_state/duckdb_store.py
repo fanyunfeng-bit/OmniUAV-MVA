@@ -161,6 +161,44 @@ class WorldStateStore:
                 "CREATE INDEX IF NOT EXISTS segments_view_t "
                 "ON segments(view_id, start_t);"
             )
+            # Phase 0 — global 3D fusion tables (M2 位姿 / M3 全局对象)
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS camera_poses (
+                    view_id VARCHAR, t DOUBLE,
+                    fx DOUBLE, fy DOUBLE, cx DOUBLE, cy DOUBLE,
+                    qx DOUBLE, qy DOUBLE, qz DOUBLE, qw DOUBLE,
+                    tx DOUBLE, ty DOUBLE, tz DOUBLE,
+                    PRIMARY KEY (view_id, t)
+                );
+                """
+            )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS global_objects (
+                    global_id VARCHAR PRIMARY KEY, class_name VARCHAR,
+                    first_t DOUBLE, last_t DOUBLE, n_views INTEGER, confidence DOUBLE
+                );
+                """
+            )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS global_observations (
+                    global_id VARCHAR, view_id VARCHAR, view_track_id VARCHAR, t DOUBLE,
+                    bx1 DOUBLE, by1 DOUBLE, bx2 DOUBLE, by2 DOUBLE,
+                    wx DOUBLE, wy DOUBLE, wz DOUBLE
+                );
+                """
+            )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS global_trajectory (
+                    global_id VARCHAR, t DOUBLE, x DOUBLE, y DOUBLE, z DOUBLE,
+                    vx DOUBLE, vy DOUBLE,
+                    PRIMARY KEY (global_id, t)
+                );
+                """
+            )
 
     def _discover_existing_views(self) -> None:
         """Seed _known_views from on-disk tables so reads work after reopen."""
@@ -473,6 +511,64 @@ class WorldStateStore:
                 [embed_chroma_id],
             ).fetchone()
         return _row_to_segment_dict(row) if row else None
+
+    # ---- global fusion state (Phase 0) ----------------------------------
+
+    def insert_camera_pose(self, pose) -> None:
+        qx, qy, qz, qw = pose.quat
+        tx, ty, tz = pose.translation
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO camera_poses VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [pose.view_id, pose.t, pose.fx, pose.fy, pose.cx, pose.cy,
+                 qx, qy, qz, qw, tx, ty, tz],
+            )
+
+    def query_camera_poses(self, view_id=None) -> list[dict]:
+        sql = "SELECT * FROM camera_poses"
+        if view_id is not None:
+            sql += f" WHERE view_id = '{view_id}'"
+        return self.execute_readonly(sql + " ORDER BY view_id, t")
+
+    def insert_global_object(self, obj) -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO global_objects VALUES (?, ?, ?, ?, ?, ?)",
+                [obj.global_id, obj.class_name, obj.first_t, obj.last_t,
+                 obj.n_views, obj.confidence],
+            )
+
+    def query_global_objects(self) -> list[dict]:
+        return self.execute_readonly("SELECT * FROM global_objects ORDER BY global_id")
+
+    def insert_global_observation(self, obs) -> None:
+        wx, wy, wz = obs.world_xyz if obs.world_xyz is not None else (None, None, None)
+        bx1, by1, bx2, by2 = obs.bbox
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO global_observations VALUES "
+                "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [obs.global_id, obs.view_id, obs.view_track_id, obs.t,
+                 bx1, by1, bx2, by2, wx, wy, wz],
+            )
+
+    def query_global_observations(self, global_id=None) -> list[dict]:
+        sql = "SELECT * FROM global_observations"
+        if global_id is not None:
+            sql += f" WHERE global_id = '{global_id}'"
+        return self.execute_readonly(sql + " ORDER BY t")
+
+    def insert_global_trajectory(self, pt) -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO global_trajectory VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [pt.global_id, pt.t, pt.x, pt.y, pt.z, pt.vx, pt.vy],
+            )
+
+    def query_global_trajectory(self, global_id) -> list[dict]:
+        return self.execute_readonly(
+            f"SELECT * FROM global_trajectory WHERE global_id = '{global_id}' ORDER BY t")
 
     def execute_readonly(self, sql: str) -> list[dict]:
         """Execute a read-only SQL query. Returns list of dicts."""
