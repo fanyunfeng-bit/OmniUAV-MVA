@@ -85,6 +85,16 @@
   真实库验证:`query(view_id="cam02")` 由 0 → 4 段;端到端 `/answer 描述视角2里的内容`
   现返回对 cam02 画面的实际描述(城市街景/黄色出租车/公交站台/现代建筑)。
 
+## 11. Phase 0 契约层（多视角全局 3D 态势融合）
+设计见 `docs/superpowers/specs/2026-07-17-modular-architecture-global-3d-fusion-design.md`；
+计划见 `docs/superpowers/plans/2026-07-19-phase0-contract-layer.md`。
+**只锁契约、不含算法，纯增量**（现有功能全绿：584 → 614 passed），解锁 6 模块并行：
+- `abb0131`/`0cdb402`/`0b03876` 契约类型（`contracts/`）：几何 `WorldPoint/Ray/CameraPose`；全局对象 `GlobalObject/GlobalObservation/GlobalTrajectory`；时空 `SceneGraphEdge/SituationEvent/GlobalPrediction`。
+- `0359257`/`947de90`/`b48278b` Protocol + fake 桩：`geometry/`（PoseProvider/Projector/TimeSync）、`fusion/`（CrossViewAssociator/Triangulator/GlobalTracker）、`reasoning/`（EventDetector/TrajectoryPredictor，复用 RelationModeler）。
+- `2a87647`/`75b86e9` 世界模型表（`l5_state/duckdb_store`，只增不改老表）：camera_poses、global_objects/observations/trajectory、scene_graph_edges、situation_events、global_predictions。
+- `dc026ce` AirSim GT 适配器（`datasets/airsim_gt`）：真值位姿 + 目标 3D 位置（M2 起步 + 评测 GT）。
+- 复用不重造：`l1_perception.Detection`、`perception.Track/Tracker`、`perception.relation.RelationModeler`。
+
 ---
 
 ## 当前使用速览
@@ -99,5 +109,5 @@ cd omni-uav && DISPLAY=:0.0 /home/fyf/miniconda3/envs/simsys/bin/python app.py
 - 停止：`bash scripts/stop_mva_sidecar.sh`
 
 ## 测试
-- MVA：`cd mva && <mva-env>/python -m pytest -m "not gpu"`（582 passed）
+- MVA：`cd mva && <mva-env>/python -m pytest -m "not gpu"`（614 passed）
 - OmniUAV：`cd omni-uav && QT_QPA_PLATFORM=offscreen <simsys>/python -m pytest tests/`（13 passed）
