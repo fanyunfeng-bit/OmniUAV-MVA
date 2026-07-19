@@ -1,0 +1,256 @@
+<title>OmniUAV-MVA 模块化架构与分工</title>
+<style>
+  :root{
+    --bg:#eef2f6; --surface:#ffffff; --sheet:#fbfcfe;
+    --ink:#14202b; --muted:#5a6b7b; --border:#d8e0e8; --border-strong:#b9c6d3;
+    --accent:#0e7490; --center:#b45309; --center-bg:#fdf1e3;
+    --prod:#0e7490; --cons:#64748b; --plat:#3f5468;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:ui-sans-serif,system-ui,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d141c; --surface:#131d27; --sheet:#fbfcfe;
+      --ink:#e7edf4; --muted:#93a4b5; --border:#243342; --border-strong:#31465a;
+      --accent:#22d3ee; --center:#f59e0b; --center-bg:#2a2113;
+      --prod:#38bdf8; --cons:#94a3b8; --plat:#7d97ad;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#eef2f6; --surface:#ffffff; --sheet:#fbfcfe;
+    --ink:#14202b; --muted:#5a6b7b; --border:#d8e0e8; --border-strong:#b9c6d3;
+    --accent:#0e7490; --center:#b45309; --center-bg:#fdf1e3;
+    --prod:#0e7490; --cons:#64748b; --plat:#3f5468;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d141c; --surface:#131d27; --sheet:#fbfcfe;
+    --ink:#e7edf4; --muted:#93a4b5; --border:#243342; --border-strong:#31465a;
+    --accent:#22d3ee; --center:#f59e0b; --center-bg:#2a2113;
+    --prod:#38bdf8; --cons:#94a3b8; --plat:#7d97ad;
+  }
+  *{box-sizing:border-box}
+  body{margin:0}
+  .wrap{
+    font-family:var(--sans); background:var(--bg); color:var(--ink);
+    min-height:100vh; padding:clamp(20px,4vw,52px);
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1080px; margin:0 auto; display:flex; flex-direction:column; gap:30px}
+
+  header{display:flex; flex-direction:column; gap:14px}
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--accent); font-weight:600;
+  }
+  h1{
+    font-size:clamp(24px,3.4vw,36px); line-height:1.15; margin:0; font-weight:700;
+    text-wrap:balance; letter-spacing:-.01em;
+  }
+  .thesis{max-width:66ch; color:var(--muted); font-size:clamp(15px,1.6vw,17px); margin:0}
+  .thesis b{color:var(--ink); font-weight:600}
+
+  .seams{display:flex; flex-wrap:wrap; gap:10px; margin-top:2px}
+  .seam{
+    display:flex; align-items:baseline; gap:8px; background:var(--surface);
+    border:1px solid var(--border); border-radius:999px; padding:7px 14px; font-size:13px;
+  }
+  .seam .k{font-family:var(--mono); color:var(--accent); font-weight:600}
+  .seam .v{color:var(--muted)}
+
+  section{display:flex; flex-direction:column; gap:12px}
+  h2{
+    font-size:13px; font-family:var(--mono); letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin:0; font-weight:600;
+    display:flex; align-items:center; gap:10px;
+  }
+  h2::after{content:""; flex:1; height:1px; background:var(--border)}
+
+  .sheet{
+    background:var(--sheet); border:1px solid var(--border-strong); border-radius:14px;
+    padding:22px 20px; overflow-x:auto;
+    box-shadow:0 1px 0 rgba(20,32,43,.04), 0 12px 34px -22px rgba(20,32,43,.5);
+  }
+  .mermaid{min-width:520px; display:flex; justify-content:center}
+  .caption{font-size:13px; color:var(--muted); margin:0}
+  .caption code{font-family:var(--mono); font-size:12px; color:var(--ink);
+    background:var(--surface); border:1px solid var(--border); border-radius:5px; padding:1px 5px}
+
+  .path{
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13.5px;
+    background:var(--center-bg); border:1px solid color-mix(in srgb,var(--center) 40%,transparent);
+    border-radius:10px; padding:11px 15px;
+  }
+  .path b{color:var(--center); font-weight:700}
+  .path .n{font-family:var(--mono); font-weight:600}
+  .path .arw{color:var(--center); font-weight:700}
+
+  /* table */
+  .twrap{overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; min-width:760px; font-size:14px}
+  thead th{
+    text-align:left; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted); font-weight:600;
+    padding:13px 16px; border-bottom:1px solid var(--border-strong); background:var(--bg);
+  }
+  tbody td{padding:15px 16px; border-bottom:1px solid var(--border); vertical-align:top}
+  tbody tr:last-child td{border-bottom:none}
+  .mod{white-space:nowrap; font-weight:700; border-left:4px solid var(--role,var(--cons))}
+  .mod .id{font-family:var(--mono); font-size:12px; color:var(--role,var(--cons)); display:block; font-weight:600}
+  .mod .nm{display:block; margin-top:2px}
+  .fn{color:var(--ink); max-width:34ch}
+  .note{color:var(--muted); max-width:40ch}
+  .own{white-space:nowrap; font-family:var(--mono); font-size:12.5px}
+  .tbd{color:var(--muted); border:1px dashed var(--border-strong); border-radius:6px; padding:2px 8px}
+  .chip{
+    display:inline-block; font-family:var(--mono); font-size:10.5px; font-weight:600;
+    letter-spacing:.04em; padding:2px 7px; border-radius:5px; margin-bottom:6px;
+    color:#fff; background:var(--role,var(--cons));
+  }
+  tr.center td{background:var(--center-bg)}
+  tr.center .mod{--role:var(--center)}
+  tr.optional td{opacity:.72}
+  tr.optional .chip{background:var(--muted)}
+
+  .legend{display:flex; flex-wrap:wrap; gap:16px; font-size:12.5px; color:var(--muted); padding:2px}
+  .legend span{display:flex; align-items:center; gap:7px}
+  .dot{width:11px; height:11px; border-radius:3px; flex:none}
+
+  footer{color:var(--muted); font-size:13px; border-top:1px solid var(--border); padding-top:18px;
+    display:flex; flex-direction:column; gap:6px}
+  footer b{color:var(--ink)}
+  .mono{font-family:var(--mono)}
+</style>
+
+<div class="wrap">
+<div class="page">
+
+  <header>
+    <div class="eyebrow">OmniUAV-MVA · 分工架构</div>
+    <h1>多视角全局 3D 态势融合 — 六模块分工</h1>
+    <p class="thesis">多路无人机视角 → 同一度量坐标系里的全局对象注册表 → <b>检测 · 跟踪 · counting · 空间关系问答 · 时空预测</b>。全局 3D 靠<b>多视角三角化</b>而非稠密重建。模块之间只经<b>数据契约 + Protocol</b> 通信，效果相互影响、实现相互独立。</p>
+    <div class="seams">
+      <div class="seam"><span class="k">契约</span><span class="v">带版本的 schema 是唯一 API</span></div>
+      <div class="seam"><span class="k">Protocol</span><span class="v">算法藏在接口后，换实现=换注入</span></div>
+      <div class="seam"><span class="k">评测</span><span class="v">每模块独立 benchmark，改算法只看本模块回归</span></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>依赖 DAG</h2>
+    <div class="sheet">
+      <pre class="mermaid">
+%%{init:{'theme':'neutral','flowchart':{'curve':'basis'}}}%%
+flowchart TD
+  ING["采集 / 时序同步 · L0"] -->|"frames + pose_meta"| WM[("世界模型 · 共享契约<br/>M6 拥有")]
+  WM -->|frames| M1["M1 感知 + 单视角跟踪"]
+  WM -->|frames| M2["M2 跨视角几何 / 度量对齐"]
+  M1 -->|ViewTracklet| M3["M3 全局融合 + 多目标跟踪 ★"]
+  M2 -->|"CameraPose / Projector"| M3
+  M1 -->|tracks| M5["M5 压缩 + 检索"]
+  M3 -->|"GlobalObject / 轨迹"| M4["M4 时空关系 + 预测"]
+  M3 -->|全局ID| M5
+  M3 -.写.-> WM
+  M4 -.写.-> WM
+  M5 -.写.-> WM
+  WM ==>|只读| M6["M6 平台 · 问答 / UI / 评测"]
+  classDef center fill:#f59e0b,stroke:#b45309,color:#241505,stroke-width:2.5px;
+  classDef prod fill:#0e7490,stroke:#0b5f76,color:#ffffff;
+  classDef cons fill:#e2e8f0,stroke:#94a3b8,color:#14202b;
+  classDef plat fill:#3f5468,stroke:#2b3b49,color:#ffffff;
+  classDef hub fill:#1f2d3a,stroke:#1f2d3a,color:#ffffff;
+  class M3 center; class M1,M2 prod; class M4,M5 cons; class M6 plat; class WM hub; class ING cons;
+      </pre>
+    </div>
+    <p class="caption">实线 = 模块间数据/契约流；虚线 <code>写</code> = 生产者持久化到世界模型；<code>只读</code> = M6 消费。唯一跨模块代码依赖为 <code>M3←M2</code>、<code>M4←M2/M3</code>、<code>M5←M1/M3</code>，全走 Protocol。</p>
+  </section>
+
+  <section>
+    <h2>全局融合流水线</h2>
+    <div class="sheet">
+      <pre class="mermaid">
+%%{init:{'theme':'neutral','flowchart':{'curve':'basis'}}}%%
+flowchart LR
+  A["M1<br/>检测 + 单视角跟踪"] --> C
+  B["M2<br/>位姿 / 标定 / 同步"] --> C
+  C["M3 跨视角关联<br/>外观 + 极线"] --> D["M3 三角化<br/>2+ 视角射线求交"]
+  D --> E["GlobalObject<br/>全局ID + 3D 轨迹"]
+  E --> F["M4 空间关系 / 场景图 / 预测"]
+  E --> G["M6 counting / 空间问答"]
+  classDef center fill:#f59e0b,stroke:#b45309,color:#241505,stroke-width:2px;
+  classDef prod fill:#0e7490,stroke:#0b5f76,color:#ffffff;
+  classDef cons fill:#e2e8f0,stroke:#94a3b8,color:#14202b;
+  classDef key fill:#fdf1e3,stroke:#b45309,color:#4a2e08,stroke-width:2px;
+  class A,B prod; class C,D center; class E key; class F,G cons;
+      </pre>
+    </div>
+    <p class="path"><b>关键路径</b><span class="n">M2 真值位姿</span><span class="arw">→</span><span class="n">M3 关联+三角化</span><span class="arw">→</span><span class="n">M6 counting+空间问答</span><span>先跑通首个端到端全局 demo</span></p>
+  </section>
+
+  <section>
+    <h2>模块 · 功能 · 注意点 · 负责人</h2>
+    <div class="twrap">
+      <table>
+        <thead>
+          <tr><th>模块</th><th>功能</th><th>注意点</th><th>负责人</th></tr>
+        </thead>
+        <tbody>
+          <tr style="--role:var(--prod)">
+            <td class="mod"><span class="chip">生产者</span><span class="id">M1</span><span class="nm">感知 + 单视角跟踪</span></td>
+            <td class="fn">检测/分割（可开放词表）+ 单视角 MOT，产出每视角逐帧观测 <span class="mono">ViewTracklet</span>。</td>
+            <td class="note">最上游；YOLO 先用，换检测器不应动跟踪（留 <span class="mono">Detector</span> Protocol）；单视角 ID 不保证跨视角唯一。</td>
+            <td class="own"><span class="tbd">待定</span></td>
+          </tr>
+          <tr style="--role:var(--prod)">
+            <td class="mod"><span class="chip">生产者</span><span class="id">M2</span><span class="nm">跨视角几何 / 度量对齐</span></td>
+            <td class="fn">内外参/位姿、跨视角时序同步、地面反投影/极线；像素 → 世界坐标。</td>
+            <td class="note">全局 3D 的<b>地基</b>；先用 AirSim 真值位姿起步，真实机再上 GPS/IMU+VO（接口不变）；时序不对齐则跨视角融合全错。</td>
+            <td class="own"><span class="tbd">待定</span></td>
+          </tr>
+          <tr class="center" style="--role:var(--center)">
+            <td class="mod"><span class="chip">中心</span><span class="id">M3 ★</span><span class="nm">全局融合 + 多目标跟踪</span></td>
+            <td class="fn">跨视角关联同一目标 → 三角化 3D → <span class="mono">GlobalObject</span>（全局 ID + 世界轨迹）。counting/问答/预测都建在它上。</td>
+            <td class="note"><b>系统枢纽</b>：关联错误会污染全部下游；外观 + 极线双约束；≥2 视角才三角化，退化落地面反投影。</td>
+            <td class="own"><span class="tbd">待定 · 优先强人</span></td>
+          </tr>
+          <tr style="--role:var(--cons)">
+            <td class="mod"><span class="chip">消费者</span><span class="id">M4</span><span class="nm">时空关系 + 预测</span></td>
+            <td class="fn">全局轨迹上的空间关系谓词/场景图 + 轨迹/关系预测。</td>
+            <td class="note">基线先几何阈值（距离/方位）+ 常速预测，留 <span class="mono">RelationModeler</span>/<span class="mono">Predictor</span> Protocol 换学习式；效果吃 M3 质量。</td>
+            <td class="own"><span class="tbd">待定</span></td>
+          </tr>
+          <tr style="--role:var(--cons)">
+            <td class="mod"><span class="chip">消费者</span><span class="id">M5</span><span class="nm">信息压缩 + 检索</span></td>
+            <td class="fn">语义 / visual-token 嵌入（段级 + 目标级）+ 多视角检索（已建）。</td>
+            <td class="note">下一步把检索绑到 <span class="mono">GlobalObject</span>（目标级命中全局 ID）；检索是初步功能，能用即可。</td>
+            <td class="own"><span class="tbd">待定</span></td>
+          </tr>
+          <tr style="--role:var(--plat)">
+            <td class="mod"><span class="chip">平台</span><span class="id">M6</span><span class="nm">世界模型 + 问答 + 评测</span></td>
+            <td class="fn">拥有共享契约（schema）+ 存储 + 服务 + 空间问答工具 + UI + 评测框架 + AirSim GT 适配。</td>
+            <td class="note">契约<b>唯一改动入口</b>，改 schema 升版本；先落 <b>Phase 0 契约层</b>解锁并行；空间问答查全局 3D 态势而非 per-view 表。</td>
+            <td class="own"><span class="tbd">待定 · 整合/平台</span></td>
+          </tr>
+          <tr class="optional" style="--role:var(--cons)">
+            <td class="mod"><span class="chip">可选</span><span class="id">—</span><span class="nm">3D 稠密重建 (3DGS)</span></td>
+            <td class="fn">稠密几何 / 逼真可视化 / 遮挡先验。</td>
+            <td class="note">不在关键路径；需要时作 <span class="mono">Reconstructor</span> Protocol 消费 M2 位姿，不影响其他模块。</td>
+            <td class="own"><span class="tbd">暂不排人</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--prod)"></i>生产者（上游产出观测/几何）</span>
+      <span><i class="dot" style="background:var(--center)"></i>中心（全局融合）</span>
+      <span><i class="dot" style="background:var(--cons)"></i>消费者（读世界模型作业）</span>
+      <span><i class="dot" style="background:var(--plat)"></i>平台（拥有契约 + 集成）</span>
+    </div>
+  </section>
+
+  <footer>
+    <div><b>契约先行 → 并行开工。</b> Phase 0（M6）：落世界模型 schema（<span class="mono">CameraPose / GlobalObject / GlobalObservation / GlobalTrajectory / SceneGraphEdge / Prediction</span>）+ 各模块 Protocol stub + AirSim GT 适配器。落地后 6 个 owner 对着契约 + fake 数据并行。</div>
+    <div>负责人一列待你填名；建议 <b>M2 + M3 关键路径</b>优先排强人，<b>M6 平台</b>由整合负责人（或你本人）兼。</div>
+  </footer>
+
+</div>
+</div>

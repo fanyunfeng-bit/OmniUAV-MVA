@@ -1,0 +1,159 @@
+<title>多无人机多视角态势汇聚 — 系统框架</title>
+<style>
+  /* 演示专用：固定浅色画布，投影/截图一致 */
+  :root{
+    --ink:#14202b; --muted:#5c6f7e; --faint:#8397a6;
+    --canvas:#eef3f7; --card:#ffffff; --border:#d6e0e8; --border-2:#c2d0da;
+    --steel:#5b6f80; --steel-bg:#eef2f5;
+    --teal:#0e7490; --teal-bg:#e6f2f5;
+    --amber:#b45309; --amber-bg:#fbe9d6;
+    --sans:ui-sans-serif,system-ui,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0}
+  .deck{
+    font-family:var(--sans); background:var(--canvas); color:var(--ink);
+    padding:clamp(22px,3.5vw,48px); min-height:100vh; -webkit-font-smoothing:antialiased;
+  }
+  .inner{max-width:1240px; margin:0 auto; display:flex; flex-direction:column; gap:clamp(22px,3vw,38px)}
+
+  header{display:flex; flex-direction:column; gap:9px}
+  .kicker{font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--teal); font-weight:600}
+  h1{margin:0; font-size:clamp(23px,3vw,34px); font-weight:750; letter-spacing:-.01em; line-height:1.12; text-wrap:balance}
+  .sub{margin:0; color:var(--muted); font-size:clamp(14px,1.5vw,17px); max-width:70ch}
+
+  /* stages */
+  .stages{display:flex; align-items:stretch; gap:6px; overflow-x:auto; padding-bottom:4px}
+  .stage{flex:1 1 0; min-width:190px; display:flex; flex-direction:column; gap:12px}
+  .stage-head{display:flex; align-items:center; gap:8px; padding:0 2px}
+  .stage-head .num{
+    font-family:var(--mono); font-size:11px; font-weight:700; color:#fff; background:var(--teal);
+    width:20px; height:20px; border-radius:6px; display:grid; place-items:center; flex:none;
+  }
+  .stage-head .lab{font-size:13.5px; font-weight:650; color:var(--ink)}
+  .stage-head .en{font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:.06em}
+  .stack{display:flex; flex-direction:column; gap:12px; flex:1; justify-content:center}
+
+  .card{
+    background:var(--card); border:1px solid var(--border); border-top:3px solid var(--acc,var(--teal));
+    border-radius:12px; padding:15px 16px; display:flex; flex-direction:column; gap:7px;
+    box-shadow:0 1px 2px rgba(20,32,43,.04), 0 14px 30px -24px rgba(20,32,43,.55);
+  }
+  .card .mid{font-family:var(--mono); font-size:11px; font-weight:700; color:var(--acc,var(--teal)); letter-spacing:.04em}
+  .card .name{font-size:16px; font-weight:700; line-height:1.25}
+  .card .role{font-size:12.5px; color:var(--muted); line-height:1.5}
+  .card .formula{
+    font-family:var(--mono); font-size:11px; color:var(--acc); background:var(--acc-bg);
+    border-radius:6px; padding:3px 8px; align-self:flex-start; font-weight:600;
+  }
+  .card.steel{--acc:var(--steel); --acc-bg:var(--steel-bg)}
+  .card.teal{--acc:var(--teal); --acc-bg:var(--teal-bg)}
+  .card.pivot{--acc:var(--teal); --acc-bg:var(--teal-bg); background:linear-gradient(180deg,var(--teal-bg),#fff 62%)}
+  .card.payoff{--acc:var(--amber); --acc-bg:var(--amber-bg); background:linear-gradient(180deg,var(--amber-bg),#fff 62%)}
+
+  .arrow{flex:none; align-self:center; display:grid; place-items:center; width:34px; color:var(--teal)}
+  .arrow svg{width:26px; height:26px}
+
+  /* progression ribbon */
+  .ribbon{
+    display:flex; align-items:center; flex-wrap:wrap; gap:10px 12px; justify-content:center;
+    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:13px 18px;
+  }
+  .ribbon .step{font-size:13px; color:var(--ink); font-weight:600}
+  .ribbon .sep{color:var(--teal); font-weight:800}
+  .ribbon .lead{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); margin-right:2px}
+
+  @media (max-width:720px){ .stages{gap:2px} .arrow{width:22px} .arrow svg{width:18px;height:18px} }
+</style>
+
+<div class="deck">
+  <div class="inner">
+
+    <header>
+      <div class="kicker">系统框架 · System Framework</div>
+      <h1>多无人机 · 多视角 态势汇聚系统</h1>
+      <p class="sub">从像素到态势理解的认知递进 —— 六个模块逐层构建全局 3D 态势，最终支撑态势问答。</p>
+    </header>
+
+    <div class="stages">
+
+      <!-- 阶段 1 基础 -->
+      <div class="stage">
+        <div class="stage-head"><span class="num">1</span><span class="lab">基础</span><span class="en">FOUNDATION</span></div>
+        <div class="stack">
+          <div class="card steel">
+            <div class="mid">M1</div>
+            <div class="name">检测 / 分割</div>
+            <div class="role">从视频中识别目标 —— 系统的基础。</div>
+          </div>
+          <div class="card steel">
+            <div class="mid">M2</div>
+            <div class="name">世界坐标系</div>
+            <div class="role">引入位姿等信息 —— 构建全局认知的关键。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+
+      <!-- 阶段 2 全局认知 -->
+      <div class="stage">
+        <div class="stage-head"><span class="num">2</span><span class="lab">全局认知</span><span class="en">GLOBAL</span></div>
+        <div class="stack">
+          <div class="card pivot">
+            <div class="mid">M3</div>
+            <div class="name">多目标跟踪</div>
+            <div class="role">构建全局 ID —— 多视角跟踪的功能验证。</div>
+            <div class="formula">M1 检测 × M2 坐标</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+
+      <!-- 阶段 3 语义与检索 -->
+      <div class="stage">
+        <div class="stage-head"><span class="num">3</span><span class="lab">语义与检索</span><span class="en">SEMANTIC</span></div>
+        <div class="stack">
+          <div class="card teal">
+            <div class="mid">M4</div>
+            <div class="name">时空关系 + 预测</div>
+            <div class="role">世界坐标与全局 ID 结合 —— 形成语义信息。</div>
+            <div class="formula">M2 坐标 × M3 全局ID</div>
+          </div>
+          <div class="card teal">
+            <div class="mid">M5</div>
+            <div class="name">信息压缩 + 检索</div>
+            <div class="role">为后续问答做准备。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15M13 6l6 6-6 6"/></svg></div>
+
+      <!-- 阶段 4 应用 -->
+      <div class="stage">
+        <div class="stage-head"><span class="num">4</span><span class="lab">应用</span><span class="en">APPLICATION</span></div>
+        <div class="stack">
+          <div class="card payoff">
+            <div class="mid">M6</div>
+            <div class="name">平台</div>
+            <div class="role">构建 UI 与问答系统 —— 面向用户的态势理解出口。</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="ribbon">
+      <span class="lead">认知递进</span>
+      <span class="step">原始视频</span><span class="sep">→</span>
+      <span class="step">检测 + 几何</span><span class="sep">→</span>
+      <span class="step">全局对象</span><span class="sep">→</span>
+      <span class="step">语义 · 检索</span><span class="sep">→</span>
+      <span class="step">态势问答</span>
+    </div>
+
+  </div>
+</div>
