@@ -95,6 +95,12 @@
 - `dc026ce` AirSim GT 适配器（`datasets/airsim_gt`）：真值位姿 + 目标 3D 位置（M2 起步 + 评测 GT）。
 - 复用不重造：`l1_perception.Detection`、`perception.Track/Tracker`、`perception.relation.RelationModeler`。
 
+## 12. 接口补齐 + 交接材料
+- `5d8be78` **M1 检测接口**：`mva/detection/`（`ObjectDetector`/`Segmenter` Protocol + 桩）；现有 `l1_perception.Detector` 结构上满足。
+- `c84f685` **M5 检索接口**：`mva/retrieval/`（`Embedder`/`Retriever` Protocol + 桩）；现有 `MultimodalEmbedder` 满足。
+- 至此 M1–M6 均有一致的「Protocol + fake 桩」接缝（M2/M3/M4 来自 Phase 0）。纯接口、不含算法，回归 614 → 621 passed。
+- **交接文档** `MODULE_OWNERS.md`：完整项目=git 仓库（232 文件，`git clone` 交接、勿拷工作目录以免带出密钥）；环境搭建；6 模块 owner 卡片（接口/现有代码/契约/表/指标/起步点）；并行开发约定；关键路径 M2→M3→M6。
+
 ---
 
 ## 当前使用速览
@@ -109,5 +115,5 @@ cd omni-uav && DISPLAY=:0.0 /home/fyf/miniconda3/envs/simsys/bin/python app.py
 - 停止：`bash scripts/stop_mva_sidecar.sh`
 
 ## 测试
-- MVA：`cd mva && <mva-env>/python -m pytest -m "not gpu"`（614 passed）
+- MVA：`cd mva && <mva-env>/python -m pytest -m "not gpu"`（621 passed）
 - OmniUAV：`cd omni-uav && QT_QPA_PLATFORM=offscreen <simsys>/python -m pytest tests/`（13 passed）
