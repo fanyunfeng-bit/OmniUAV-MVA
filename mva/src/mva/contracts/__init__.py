@@ -8,6 +8,7 @@ Briefing, ViewObservation) carry transport shape without validation overhead.
 from mva.contracts.cross_view import CrossViewLink, make_link_id
 from mva.contracts.events import Anomaly, TrajectoryPrediction
 from mva.contracts.geometry import CameraPose, Ray, WorldPoint
+from mva.contracts.global_state import GlobalObject, GlobalObservation, GlobalTrajectory
 from mva.contracts.stream import (
     Attachment,
     Briefing,
@@ -33,4 +34,7 @@ __all__ = [
     "WorldPoint",
     "Ray",
     "CameraPose",
+    "GlobalObject",
+    "GlobalObservation",
+    "GlobalTrajectory",
 ]
