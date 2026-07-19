@@ -9,6 +9,7 @@ from mva.contracts.cross_view import CrossViewLink, make_link_id
 from mva.contracts.events import Anomaly, TrajectoryPrediction
 from mva.contracts.geometry import CameraPose, Ray, WorldPoint
 from mva.contracts.global_state import GlobalObject, GlobalObservation, GlobalTrajectory
+from mva.contracts.spatiotemporal import GlobalPrediction, SceneGraphEdge, SituationEvent
 from mva.contracts.stream import (
     Attachment,
     Briefing,
@@ -37,4 +38,7 @@ __all__ = [
     "GlobalObject",
     "GlobalObservation",
     "GlobalTrajectory",
+    "SceneGraphEdge",
+    "SituationEvent",
+    "GlobalPrediction",
 ]
