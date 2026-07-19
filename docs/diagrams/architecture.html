@@ -142,13 +142,12 @@
 %%{init:{'theme':'neutral','flowchart':{'curve':'basis'}}}%%
 flowchart TD
   ING["采集 / 时序同步 · L0"] -->|"frames + pose_meta"| WM[("世界模型 · 共享契约<br/>M6 拥有")]
-  WM -->|frames| M1["M1 感知 + 单视角跟踪"]
+  WM -->|frames| M1["M1 检测 / 分割"]
   WM -->|frames| M2["M2 跨视角几何 / 度量对齐"]
-  M1 -->|ViewTracklet| M3["M3 全局融合 + 多目标跟踪 ★"]
+  M1 -->|Detection| M3["M3 多目标跟踪（单+多视角） ★"]
   M2 -->|"CameraPose / Projector"| M3
-  M1 -->|tracks| M5["M5 压缩 + 检索"]
+  M3 -->|"ViewTracklet / 全局ID"| M5["M5 压缩 + 检索"]
   M3 -->|"GlobalObject / 轨迹"| M4["M4 时空关系 + 预测"]
-  M3 -->|全局ID| M5
   M3 -.写.-> WM
   M4 -.写.-> WM
   M5 -.写.-> WM
@@ -161,7 +160,7 @@ flowchart TD
   class M3 center; class M1,M2 prod; class M4,M5 cons; class M6 plat; class WM hub; class ING cons;
       </pre>
     </div>
-    <p class="caption">实线 = 模块间数据/契约流；虚线 <code>写</code> = 生产者持久化到世界模型；<code>只读</code> = M6 消费。唯一跨模块代码依赖为 <code>M3←M2</code>、<code>M4←M2/M3</code>、<code>M5←M1/M3</code>，全走 Protocol。</p>
+    <p class="caption">实线 = 模块间数据/契约流；虚线 <code>写</code> = 生产者持久化到世界模型；<code>只读</code> = M6 消费。唯一跨模块代码依赖为 <code>M3←M1/M2</code>、<code>M4←M2/M3</code>、<code>M5←M3</code>，全走 Protocol。</p>
   </section>
 
   <section>
@@ -170,9 +169,9 @@ flowchart TD
       <pre class="mermaid">
 %%{init:{'theme':'neutral','flowchart':{'curve':'basis'}}}%%
 flowchart LR
-  A["M1<br/>检测 + 单视角跟踪"] --> C
+  A["M1<br/>检测 / 分割"] --> C
   B["M2<br/>位姿 / 标定 / 同步"] --> C
-  C["M3 跨视角关联<br/>外观 + 极线"] --> D["M3 三角化<br/>2+ 视角射线求交"]
+  C["M3 单视角跟踪 → 跨视角关联<br/>外观 + 极线"] --> D["M3 三角化<br/>2+ 视角射线求交"]
   D --> E["GlobalObject<br/>全局ID + 3D 轨迹"]
   E --> F["M4 空间关系 / 场景图 / 预测"]
   E --> G["M6 counting / 空间问答"]
@@ -195,9 +194,9 @@ flowchart LR
         </thead>
         <tbody>
           <tr style="--role:var(--prod)">
-            <td class="mod"><span class="chip">生产者</span><span class="id">M1</span><span class="nm">感知 + 单视角跟踪</span></td>
-            <td class="fn">检测/分割（可开放词表）+ 单视角 MOT，产出每视角逐帧观测 <span class="mono">ViewTracklet</span>。</td>
-            <td class="note">最上游；YOLO 先用，换检测器不应动跟踪（留 <span class="mono">Detector</span> Protocol）；单视角 ID 不保证跨视角唯一。</td>
+            <td class="mod"><span class="chip">生产者</span><span class="id">M1</span><span class="nm">检测 / 分割</span></td>
+            <td class="fn">逐视角逐帧检测/分割（可开放词表/小目标），产出 <span class="mono">Detection</span>。</td>
+            <td class="note">最上游；检测与跟踪<b>分家</b>=换检测器不动跟踪器（留 <span class="mono">Detector</span> Protocol）；本模块不含跟踪。</td>
             <td class="own"><span class="tbd">待定</span></td>
           </tr>
           <tr style="--role:var(--prod)">
@@ -207,14 +206,14 @@ flowchart LR
             <td class="own"><span class="tbd">待定</span></td>
           </tr>
           <tr class="center" style="--role:var(--center)">
-            <td class="mod"><span class="chip">中心</span><span class="id">M3 ★</span><span class="nm">全局融合 + 多目标跟踪</span></td>
-            <td class="fn">跨视角关联同一目标 → 三角化 3D → <span class="mono">GlobalObject</span>（全局 ID + 世界轨迹）。counting/问答/预测都建在它上。</td>
-            <td class="note"><b>系统枢纽</b>：关联错误会污染全部下游；外观 + 极线双约束；≥2 视角才三角化，退化落地面反投影。</td>
+            <td class="mod"><span class="chip">中心</span><span class="id">M3 ★</span><span class="nm">多目标跟踪（单 + 多视角）</span></td>
+            <td class="fn">单视角 MOT → 跨视角关联 + 全局 ID + 三角化 3D + 时序 → <span class="mono">GlobalObject</span>。counting/问答/预测都建在它上。</td>
+            <td class="note"><b>系统枢纽</b>：关联错误会污染全部下游；外观 + 极线双约束；≥2 视角才三角化，退化落地面反投影；无 M2 时可纯外观降级。</td>
             <td class="own"><span class="tbd">待定 · 优先强人</span></td>
           </tr>
           <tr style="--role:var(--cons)">
             <td class="mod"><span class="chip">消费者</span><span class="id">M4</span><span class="nm">时空关系 + 预测</span></td>
-            <td class="fn">全局轨迹上的空间关系谓词/场景图 + 轨迹/关系预测。</td>
+            <td class="fn">全局轨迹上的空间关系/场景图 + 事件/异常/变化 + 轨迹/意图预测。</td>
             <td class="note">基线先几何阈值（距离/方位）+ 常速预测，留 <span class="mono">RelationModeler</span>/<span class="mono">Predictor</span> Protocol 换学习式；效果吃 M3 质量。</td>
             <td class="own"><span class="tbd">待定</span></td>
           </tr>
