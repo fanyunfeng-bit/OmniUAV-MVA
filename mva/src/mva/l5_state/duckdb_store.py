@@ -199,6 +199,32 @@ class WorldStateStore:
                 );
                 """
             )
+            # Phase 0 — M4 时空推理表（场景图 / 事件 / 预测）
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS scene_graph_edges (
+                    t DOUBLE, subj_global_id VARCHAR, rel VARCHAR,
+                    obj VARCHAR, confidence DOUBLE
+                );
+                """
+            )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS situation_events (
+                    event_id VARCHAR PRIMARY KEY, kind VARCHAR,
+                    t_start DOUBLE, t_end DOUBLE,
+                    global_ids VARCHAR,   -- JSON list
+                    region VARCHAR, confidence DOUBLE
+                );
+                """
+            )
+            self.conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS global_predictions (
+                    global_id VARCHAR, t_future DOUBLE, x DOUBLE, y DOUBLE, confidence DOUBLE
+                );
+                """
+            )
 
     def _discover_existing_views(self) -> None:
         """Seed _known_views from on-disk tables so reads work after reopen."""
@@ -569,6 +595,46 @@ class WorldStateStore:
     def query_global_trajectory(self, global_id) -> list[dict]:
         return self.execute_readonly(
             f"SELECT * FROM global_trajectory WHERE global_id = '{global_id}' ORDER BY t")
+
+    # ---- M4 reasoning state (Phase 0) -----------------------------------
+
+    def insert_scene_graph_edge(self, e) -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO scene_graph_edges VALUES (?, ?, ?, ?, ?)",
+                [e.t, e.subj_global_id, e.rel, e.obj, e.confidence],
+            )
+
+    def query_scene_graph_edges(self, t=None) -> list[dict]:
+        sql = "SELECT * FROM scene_graph_edges"
+        if t is not None:
+            sql += f" WHERE t = {float(t)}"
+        return self.execute_readonly(sql + " ORDER BY t")
+
+    def insert_situation_event(self, ev) -> None:
+        gids = json.dumps(ev.global_ids, ensure_ascii=False)
+        with self._lock:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO situation_events VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [ev.event_id, ev.kind, ev.t_start, ev.t_end, gids,
+                 ev.region, ev.confidence],
+            )
+
+    def query_situation_events(self) -> list[dict]:
+        return self.execute_readonly("SELECT * FROM situation_events ORDER BY t_start")
+
+    def insert_global_prediction(self, p) -> None:
+        with self._lock:
+            self.conn.execute(
+                "INSERT INTO global_predictions VALUES (?, ?, ?, ?, ?)",
+                [p.global_id, p.t_future, p.x, p.y, p.confidence],
+            )
+
+    def query_global_predictions(self, global_id=None) -> list[dict]:
+        sql = "SELECT * FROM global_predictions"
+        if global_id is not None:
+            sql += f" WHERE global_id = '{global_id}'"
+        return self.execute_readonly(sql + " ORDER BY t_future")
 
     def execute_readonly(self, sql: str) -> list[dict]:
         """Execute a read-only SQL query. Returns list of dicts."""
