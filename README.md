@@ -77,7 +77,8 @@ OmniUAV-MVA/
 │   ├── superpowers/specs/    # 设计 spec（含 2026-07-17 模块化全局3D融合）
 │   ├── superpowers/plans/    # 分阶段实现计划（含 Phase 0 契约层）
 │   └── diagrams/             # architecture.html（分工图）/ framework.html（框架图）
-├── scripts/                  # start/stop sidecar、record_airsim_4view
+├── scripts/                  # start/stop_mva_sidecar、start/stop_live_mva(一条龙实时)、record_airsim_4view
+├── sim/                      # 仿真侧启动脚本(AirSim+ROS+rosbridge)；重型运行时(UE4/镜像/工作区)为外部前置，见 sim/README.md
 ├── omni-uav/                 # 【M6·UI】PyQt5 前端（唯一界面）
 │   ├── app.py                #   主窗口、问答路由、入库/检索/切库联动
 │   ├── tabs/                 #   camera_tab / retrieval_tab / reconstruction / evaluation

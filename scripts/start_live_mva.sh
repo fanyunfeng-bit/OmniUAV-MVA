@@ -7,16 +7,14 @@
 #       bash scripts/start_live_mva.sh --no-fly     # 不飞，仅 4 路静态实时画面
 # 停止: bash scripts/stop_live_mva.sh
 set -u
-SIM=/home/fyf/fyf/PCL/Simulation-System
-MVA=/home/fyf/fyf/PCL/OmniUAV-MVA
-SIMSYS_PY=/home/fyf/miniconda3/envs/simsys/bin/python
+MVA=$(cd "$(dirname "$0")/.." && pwd)        # 仓库根（脚本在 scripts/ 下）
+SIMSYS_PY=${SIMSYS_PY:-/home/fyf/miniconda3/envs/simsys/bin/python}
 LOGDIR=/tmp/sim_live_logs; mkdir -p "$LOGDIR"
 
 echo "==================================================================="
-echo " [1/3] 仿真 + ROS + rosbridge(:9090) + 4 机  (Simulation-System)"
+echo " [1/3] 仿真 + ROS + rosbridge(:9090) + 4 机  (sim/)"
 echo "==================================================================="
-bash "$SIM/start_live_demo.sh" "$@"          # 起 UE4 + airsim_node + rosbridge + planner + patrol
-pkill -9 -f 'app[.]py' 2>/dev/null; sleep 1  # 关掉它顺带开的旧前端，改用 MVA 版
+bash "$MVA/sim/start_live_demo.sh" "$@"      # 起 UE4 + airsim_node + rosbridge + planner + patrol（无前端）
 
 echo "==================================================================="
 echo " [2/3] MVA sidecar(分析引擎 :8900)"

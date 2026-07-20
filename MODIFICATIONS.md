@@ -101,6 +101,14 @@
 - 至此 M1–M6 均有一致的「Protocol + fake 桩」接缝（M2/M3/M4 来自 Phase 0）。纯接口、不含算法，回归 614 → 621 passed。
 - **交接文档** `MODULE_OWNERS.md`：完整项目=git 仓库（232 文件，`git clone` 交接、勿拷工作目录以免带出密钥）；环境搭建；6 模块 owner 卡片（接口/现有代码/契约/表/指标/起步点）；并行开发约定；关键路径 M2→M3→M6。
 
+## 13. 仿真启动脚本 vendored 进仓库（单一 project）
+把仿真侧启动脚本搬进 `sim/`，让 OmniUAV-MVA 成为唯一 clone 目标（本地+仿真两种分析一个仓库）：
+- `sim/start_live_demo.sh` / `sim/stop_live_demo.sh`：从 `Simulation-System/` 移入并**参数化外部路径**
+  （`SIM_WS`/`SIM_UE4_DIR`/`SIM_IMAGE`/`SIM_CONTAINER`…），且**去掉旧前端启动**（仿真 infra-only）。
+- `sim/README.md`：外部前置（docker 镜像 `noetic:v1.5`、UE4 构建、ROS 工作区）清单——和权重/数据一样不进 git。
+- `scripts/start_live_mva.sh`/`stop_live_mva.sh` 改调**仓库内** `sim/*`，删掉「pkill 旧前端」的 hack。
+- 仿真 ROS 源码（airsim_swarm/situation_awareness*）未 vendored：它们是 docker 镜像/工作区的构建源，运行在容器内。
+
 ---
 
 ## 当前使用速览
